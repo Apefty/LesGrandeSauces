@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- WINDOWS VERSION! -->
+<!-- build 1.4.0 — 2026-07-21 -->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Les Grandes Sauces</title>
+    <link rel="stylesheet" href="css/styles_a.css">
+    <link rel="stylesheet" href="css/vendor/all.min.css">
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> -->
+    <!-- <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script> -->
+    <script src="icons/icons-data.js"></script>
+    <script src="icons/local-iconify.js"></script>
+</head>
+<body>
+<div id="app">
+<div class="hdr">
+  <button class="hbk" id="bb" style="display:none" onclick="goBack()">
+    <span class="iconify" data-icon="lets-icons:back"></span>
+  </button>
+  <div class="htl" id="ht"></div>
+
+  <button class="hbt lang-btn" onclick="toggleLang()" title="Language">
+    <span id="lang-label">EN</span>
+  </button>
+  <button class="hbt" onclick="showAbout()" title="About">
+    <span style="font-size:18px;font-weight:600">?</span>
+  </button>
+  <button class="hbt" id="bfh" style="display:none" onclick="tFav()">
+    <span class="iconify" data-icon="mdi:heart"></span>
+  </button>
+  <!-- <button class="hbt" id="bad" onclick="oForm(null)" style="font-size:24px;font-weight:300;line-height:1">+</button> -->
+</div>
+
+<div class="scr active" id="s-home">
+  <div class="sb">
+    <div class="hero">
+      <div class="h-eye" id="hero-eye">
+        Classical French Sauce Catalogue. Escoffier, Robuchon, Bocuse.
+      </div>
+      <div class="h-tit">Les <em>Grandes&nbsp;</em>Sauces</div>
+      <div class="h-sub" id="hero-sub"></div>
+    </div>
+<div class="sw">
+    <div class="font-size-ctrl">
+        <button onclick="changeFontSize(-1)">A−</button>
+        <button onclick="changeFontSize(1)">A+</button>
+    </div>
+
+    <div class="search-box">
+        <span class="si">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+
+        <input type="text" id="sq" oninput="updateClearButton('sq'); oSrch(this.value)">
+
+        <span class="sclr"
+              id="sq-clear"
+              onclick="clearSearch('allq', function(){ bAll(); })">✕</span>
+    </div>
+</div>
+    <div id="sr" class="sres"></div>
+    
+    <div id="hm">
+
+  <div class="total-count" id="total-count">
+    <span id="total-count-number"></span>
+  </div>
+  <div class="total-count-note">
+    <span id="total-count-note"></span>
+  </div>
+      <div class="grid">
+        <div class="gc" onclick="nTo('hierarchy')">
+          <div class="gc-ico"><span class="iconify" data-icon="mdi:sitemap"></span></div>
+          <div class="gc-t" id="nav-hierarchy"></div>
+          <div class="gc-d" id="nav-hierarchy-desc"></div>
+        </div>
+        <div class="gc" onclick="nTo('usage')">
+          <div class="gc-ico"><span class="iconify" data-icon="mdi:food-turkey"></span></div>
+          <div class="gc-t" id="nav-dish"></div>
+          <div class="gc-d" id="nav-dish-desc"></div>
+        </div>
+        <div class="gc" onclick="nTo('technique')">
+          <div class="gc-ico"><span class="iconify" data-icon="game-icons:whisk"></span></div>
+          <div class="gc-t" id="nav-technique"></div>
+          <div class="gc-d" id="nav-technique-desc"></div>
+        </div>
+        <div class="gc" onclick="nTo('all')">
+          <div class="gc-ico"><span class="iconify" data-icon="qlementine-icons:view-page-all-16"></span></div>
+          <div class="gc-t" id="nav-all"></div>
+          <div class="gc-d" id="nav-all-desc"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scr" id="s-hierarchy"><div class="sb" id="hb"></div></div>
+<div class="scr" id="s-usage"><div class="sb" id="ub"></div></div>
+<div class="scr" id="s-technique"><div class="sb" id="tb"></div></div>
+<div class="scr" id="s-sublist">
+  <div class="sort-bar">
+    <button class="sort-btn" onclick="toggleSortMenu('sort-menu-sublist')">
+      <i class="fa-solid fa-arrow-down-wide-short"></i>
+    </button>
+    <div class="sort-menu" id="sort-menu-sublist">
+      <div onclick="pickSort('sort-menu-sublist','az',renderSublist)" data-i18n="sort_az"></div>
+      <div onclick="pickSort('sort-menu-sublist','za',renderSublist)" data-i18n="sort_za"></div>
+      <div onclick="pickSort('sort-menu-sublist','time-asc',renderSublist)" data-i18n="sort_time_asc"></div>
+      <div onclick="pickSort('sort-menu-sublist','time-desc',renderSublist)" data-i18n="sort_time_desc"></div>
+      <div onclick="pickSort('sort-menu-sublist','diff-asc',renderSublist)" data-i18n="sort_diff_asc"></div>
+      <div onclick="pickSort('sort-menu-sublist','diff-desc',renderSublist)" data-i18n="sort_diff_desc"></div>
+    </div>
+  </div>
+  <div class="sb" id="slb"></div>
+</div>
+<div class="scr" id="s-all">
+    <div class="s-all-top">
+
+<div class="sw">
+    <div class="search-box">
+        <span class="si">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+
+        <input type="text" id="allq" oninput="updateClearButton('allq'); bAll()">
+
+        <span class="sclr"
+              id="allq-clear"
+              onclick="clearSearch('allq', bAll)">✕</span>
+    </div>
+</div>
+      <div class="sort-bar">
+        <button class="sort-btn" onclick="toggleSortMenu('sort-menu-all')">
+        <i class="fa-solid fa-arrow-down-wide-short"></i>
+        </button>
+        <div class="sort-menu" id="sort-menu-all">
+          <div onclick="pickSort('sort-menu-all','az',bAll)" data-i18n="sort_az"></div>
+          <div onclick="pickSort('sort-menu-all','za',bAll)" data-i18n="sort_za"></div>
+          <div onclick="pickSort('sort-menu-all','time-asc',bAll)" data-i18n="sort_time_asc"></div>
+          <div onclick="pickSort('sort-menu-all','time-desc',bAll)" data-i18n="sort_time_desc"></div>
+          <div onclick="pickSort('sort-menu-all','diff-asc',bAll)" data-i18n="sort_diff_asc"></div>
+          <div onclick="pickSort('sort-menu-all','diff-desc',bAll)" data-i18n="sort_diff_desc"></div>
+          </div>
+      </div>
+    </div>
+
+  <div class="all-filter" id="all-filter"></div>
+  <div class="sb" id="alb"></div>
+</div>
+<div class="scr" id="s-sauce"><div class="sb" id="sab"></div></div>
+<div class="scr" id="s-favs"><div class="sb" id="fb2"></div></div>
+<div class="scr" id="s-form"><div class="sb"><div class="fbody" id="fb3"></div></div></div>
+
+<div class="scr" id="s-about"><div class="sb" id="abb"></div></div>
+<div class="scr" id="s-glossary">
+<div class="sw">
+    <div class="search-box">
+        <span class="si">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+
+        <input type="text" id="glq" oninput="updateClearButton('glq'); bGlossary(this.value)">
+
+        <span class="sclr"
+              id="glq-clear"
+              onclick="clearSearch('glq', bGlossary)">✕</span>
+    </div>
+</div>
+  <div class="sb" id="glb"></div>
+</div>
+
+<div class="bnav">
+  <button class="nb on" id="nb-home" onclick="nTo('home')">
+    <i class="fa-solid fa-house"></i>
+    <span id="bnav-home"></span>
+  </button>
+  <button class="nb" id="nb-hierarchy" onclick="nTo('hierarchy')">
+    <i class="fa-solid fa-sitemap"></i>
+    <span id="bnav-structure"></span>
+  </button>
+  <button class="nb" id="nb-all" onclick="nTo('all')">
+    <i class="fa-solid fa-list"></i>
+    <span id="bnav-all"></span>
+  </button>
+  <button class="nb" id="nb-favs" onclick="nTo('favs')">
+    <i class="fa-solid fa-heart"></i>
+    <span id="bnav-saved"></span>
+  </button>
+  <button class="nb" id="nb-glossary" onclick="nTo('glossary')">
+  <span class="iconify" data-icon="streamline:dictionary-language-book-solid"></span>
+  <span id="bnav-glossary"></span>
+</button>
+</div>
+</div>
+
+<script src="data/glossary/glossary.js"></script>
+<script src="data/data.js"></script>
+<script src="data/app.js"></script>
+<script src="lang/en.js"></script>
+<script src="lang/uk.js"></script>
+<script src="ota.js"></script>
+
+
+</body>
+</html>

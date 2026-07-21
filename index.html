@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <!-- ANDROID VERSION! -->
-<!-- build 1.5.2 — 2026-07-21 -->
+<!-- build 1.5.4 — 2026-07-21 -->
 
 <head>
     <meta charset="UTF-8">
@@ -13,8 +13,92 @@
     <!-- <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script> -->
     <script src="icons/icons-data.js"></script>
     <script src="icons/local-iconify.js"></script>
+    <style>
+  @font-face {
+    font-family: "Great Vibes";
+    src: url("css/fonts/great-vibes.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Play";
+    src: url("css/fonts/play-regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+</style>
+<style id="first-run-splash-style">
+  #first-run-splash {
+    position: fixed; inset: 0; z-index: 99999;
+    background: #f5ede1;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 0;
+    transition: opacity 1s ease;
+    
+  }
+  #first-run-splash .fr-line {
+    font-family: "Great Vibes", cursive;
+    -webkit-text-stroke: .3px rgba(230,230,230,.9);
+    text-shadow: 1px 1px 12px rgba(0,0,0,1);
+    color: #fafafa;
+    line-height: 1.1;
+  }
+  #first-run-splash .fr-line.fr-mid { color: #e07a3f; }
+  #first-run-splash .fr-les    { font-size: 15vw; }
+  #first-run-splash .fr-mid    { font-size: 17vw; }
+  #first-run-splash .fr-sauces { font-size: 15vw; }
+  #first-run-splash .fr-version {
+    font-family: "Play", sans-serif;
+    color: #6e5f50;
+    font-size: 16px;
+    margin-top: 24px;
+  }
+  #first-run-splash.fr-hide { opacity: 0; pointer-events: none; }
+</style>
 </head>
 <body>
+  <!--- splash -->
+<div id="first-run-splash">
+  <div class="fr-line fr-les">Les</div>
+  <div class="fr-line fr-mid">Grandes</div>
+  <div class="fr-line fr-sauces">Sauces</div>
+  <div class="fr-version">ver. 1.5.4</div>
+</div>
+<!---  -->
+<script>
+  console.log('SPLASH SCRIPT RUNNING');
+  if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.SplashScreen) {
+    Capacitor.Plugins.SplashScreen.hide();
+  }
+</script>
+<!-- <script>
+  (function() {
+    if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.SplashScreen) {
+      Capacitor.Plugins.SplashScreen.hide();
+    }
+    var splash = document.getElementById('first-run-splash');
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        splash.classList.add('fr-hide');
+        setTimeout(function(){ splash.remove(); }, 500);
+      }, 1200);
+    });
+  })();
+</script> -->
+<script>
+  (function() {
+    var splash = document.getElementById('first-run-splash');
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        splash.classList.add('fr-hide');
+        setTimeout(function(){ splash.remove(); }, 2000);
+      }, 6000);
+    });
+  })();
+</script>
+
 <div id="app">
 <div class="hdr">
   <button class="hbk" id="bb" style="display:none" onclick="goBack()">

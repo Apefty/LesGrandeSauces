@@ -18,7 +18,7 @@ export default {
     ],
     rc: "Prepare a fish fumet using only an excellent red wine. Cook for 25-30 minutes. Strain through a chinois and set aside. Sweat 40g of chopped onion and 20g of chopped shallot in butter; add 50g of mushrooms, 1 sprig of thyme, a piece of bay leaf, and 1 crushed garlic clove. Deglaze with 1 litre of red wine fish fumet, bring to a boil, and reduce by three-quarters to obtain about 25cl. Add the cooking liquid from the prepared fish and reduce again by half. Add 20cl of espagnole sauce or thickened veal stock; bring to a boil, skim, and cook for a few minutes, then strain through a chinois. Off the heat, finish the sauce by whisking in 50g of butter. Season with salt and pepper.",
 
-    nm_uk: "Соус Бургіньон (рибний) (Роб)",
+    nm_uk: "Соус Бургіньон рибний (Роб)",
     pr_uk: ["риба", "форель", "короп", "щука"],
     ig_uk: {
       base: ["фюме з риби на червоному вині (1л)", "еспаньол або загущений телячий бульйон (200 мл)"],

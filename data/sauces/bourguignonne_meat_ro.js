@@ -18,7 +18,7 @@ export default {
     ],
     rc: "Blanch and brown 75g of semi-salted pork belly. Add 40g of onion, 40g of carrot and 20g of shallots. Sweat and then moisten with 1 litre of excellent red wine; add 1 bouquet garni, 100g of mushroom trimmings, 1 crushed garlic clove, 1 pinch of salt and 5 or 6 cracked peppercorns. Bring to the boil and cook gently for 30 minutes. Add 30cl of espagnole sauce or bound brown veal stock. Bring to a boil and reduce by a third. Skim and strain through a sieve cheesecloth. Off the heat, whip the sauce with 50g of butter. Check seasoning with salt and pepper.",
 
-    nm_uk: "Соус Бургіньон (м (Роб)'ясо)",
+    nm_uk: "Соус Бургіньон м'ясний (Роб)",
     pr_uk: ["яловичина", "птиця", "яйця", "субпродукти"],
     ig_uk: {
       base: ["червоне вино (1л)", "еспаньол або коричневий телячий бульйон (300 мл)"],

@@ -1,5 +1,5 @@
 /* <!-- ANDROID VERSION! --> */
-// build 1.5.4 — 2026-07-21
+// build 1.6.0 — 2026-07-22
 
 // ── все читається з window.SD (визначено в data.js) ───────────────────
 var SD; // буде присвоєно після завантаження DOM
@@ -1143,80 +1143,24 @@ filtered = sortAllItems(filtered, allR(), sortModeAll);
   }).join('') + '</div>';
 }
 
-var ALL_SAUCE_KEYS = [
-  // A
-  'Aioli (Ro)', 'Aioli Sauce (Es)', 'Albert Sauce (Es)', 'Albufera (Ro)', 'Allemande Grasse (Ro)', 'Allemande Maigre (Ro)', 'Allemande Sauce (Es)', 'Anchovy Sauce (Es)', 'Andalouse Sauce (Es)','Apple Sauce (Ro)', 'Apple Sauce (Es)','Aurora (Ro)', 'Aurore Sauce (Es)',
+// ALL_SAUCE_KEYS now lives in data/keys.json, fetched below and
+// populated before initApp() runs (see DOMContentLoaded handler).
+var ALL_SAUCE_KEYS = [];
 
-  // B
-  'Bearnaise (Ro)', 'Bearnaise Sauce (Es)', 'Bechamel (Ro)', 'Bechamel (Es)', 'Bercy Butter (Es)', 'Bercy Fish (Ro)', 'Bercy Meat (Ro)', 'Bercy Sauce (Es)',
-  'Beurre Blanc (Ro)', 'Beurre Nantais (Bo)', 'Bigarade (Ro)', 'Bigarade Sauce (Es)', 'Blackcurrant (Ro)', 'Black Butter (Es)', 'Bohemian Sauce','Bohemian Sauce (Es)', 
-  'Bolognese (Ro)', 'Bonnefoy Sauce (Es)', 'Bontemps (Ro)', 'Bordelaise (Ro)', 'Bordelaise Sauce (Es)', 'Bourguignonne Fish (Ro)',
-  'Bourguignonne Meat (Ro)', 'Bourguignonne Sauce (Es)', 'Bread Sauce (Es)','Breton (Ro)', 'Brown Chaud-Froid Sauce (Es)', 'Butter Sauce (Es)',
-
-  // C
-  'Cambridge (Ro)', 'Cambridge Sauce (Es)', 'Caper Sauce (Es)', 'Caramel (Ro)', 'Cardinal (Ro)', 'Cardinal Sauce (Es)', 'Celery Sauce (Es)', 'Chasseur (Ro)', 'Chasseur Sauce (Es)', 'Chateaubriand (Ro)', 'Chateaubriand Butter (Es)', 'Chateaubriand Sauce (Es)', 'Chaud-Froid Brown (Ro)', 'Chaud-Froid Duck (Es)', 'Chaud-Froid Fish (Es)', 'Chaud-Froid Game (Es)', 'Chaud-Froid Poultry', 'Chaud-Froid Sauce à l\'Aurore (Es)', 'Chaud-Froid Sauce au Vert-Pré (Es)', 'Chaud-Froid White (Ro)', 'Chevreuil (Ro)', 'Chivry Butter (Es)', 'Chocolate (Ro)', 'Choron (Ro)', 'Choron Sauce (Es)', 'Cold Andalusian (Ro)', 'Cold Russian (Ro)', 'Colbert (Ro)', 'Colbert Butter (Es)', 'Cranberry (Ro)', 'Cranberry Sauce (Es)', 'Crayfish Butter (Es)', 'Cumberland (Ro)', 'Cumberland Sauce (Es)',
-
-  // D
-  'Devilled Sauce (Es)', 'Diable (Ro)', 'Dijonnaise (Ro)', 'Duxelles (Ro)',
-
-  // E
-  'Egg Sauce (Es)','Espagnole (Es)',
-
-  // F
-  'Fennel Sauce (Es)','Financière', 'Fish Velouté (Es)', 'Foyot (Ro)', 'Foyot Sauce (Es)',
-
-  // G
-  'Genevoise (Ro)', 'Genevoise Sauce (Es)', 'Genoa Sauce (Es)', 'Gloucester Sauce (Es)','Godard (Ro)', 'Grand Veneur (Ro)', 'Grand Veneur Sauce (Es)',  'Green Colouring Butter (Es)', 'Green Sauce (Es)', 'Gribiche (Ro)','Gribiche Sauce (Es)',
-
-  // H
-  'Hachée (Ro)', 'Hazel-Nut Butter (Es)','Hollandaise (Ro)', 'Hollandaise Sauce (Es)', 'Horse-Radish Sauce (Es)','Hot Andalusian (Ro)', 'Hungarian (Ro)', 
-
-  // I
-  'Indian (Ro)', 'Italian Sauce (Es)', 'Ivory',
-  
-  //J
-  'Joinville Sauce (Es)',
-
-  // L
-  'La Varenne (Ro)', 'Lemonette', 'Lenten Aurore Sauce (Es)', 'Lenten Espagnole (Es)', 'Lenten Italian Sauce (Es)', 'Lobster Butter (Es)','Lyonnaise (Ro)', 'Lyonnaise Sauce (Es)',
-
-  // M
-"Maître d'Hôtel Butter (Es)", 'Madeira (Ro)', 'Madeira Sauce (Es)', 'Maltese (Ro)', 'Maltese Sauce (Es)', 'Manied Butter (Es)', 'Marinière (Ro)', 'Marinière Sauce (Es)', 'Marrow Sauce (Es)', 'Matelote (Ro)', 'Matelote Sauce (Es)', 'Mayonnaise (Ro)', 'Mayonnaise Sauce (Es)', 'Melted Butter (Es)', 'Meunière Butter (Es)', 'Mint Sauce', 'Mint Sauce (Es)', 'Moelle (Ro)', 'Montpellier Butter (Es)', 'Mornay (Ro)', 'Mornay Sauce (Es)', 'Mousseline (Ro)', 'Mousseline Sauce (Es)', 'Mousseuse Sauce (Es)', 'Mushroom Sauce (Es)', 'Mustard Grill (Ro)', 'Mustard Sauce (Ro)', 'Mustard Sauce (Es)', 'Mustard Sauce Cold (Ro)',
-
-  // N
-  'Nantua (Ro)', 'Normandy (Ro)','Nantua Sauce (Es)', 'Newburg Sauce (Es)', 'Noisette Sauce (Es)', 'Normande Sauce (Es)',
-
-  // O
-  'Ordinary Chaud-Froid Sauce (Es)', 'Ordinary Poivrade Sauce (Es)', 'Oriental Sauce (Es)', 'Oxford Sauce', 'Oyster (Ro)','Oxford Sauce (Es)',
-
- // P
-'Paloise (Ro)', "Paloise (Es)",'Parsley Sauce (Es)', 'Peach Sauce (Ro)', 'Perigueux (Ro)', 'Perigueux Sauce (Es)', 'Pignons Sauce (Es)', 'Piquante (Ro)', 'Piquante Sauce (Es)', 'Pistachio Butter (Es)', 'Poivrade (Ro)', 'Poivrade Sauce for Venison (Es)', 'Porto', 'Poulette (Ro)', 'Poulette Sauce (Es)', 'Poultry Veloute', 'Printanier Butter (Es)', 'Provençale Sauce (Es)',
-
-  // R
-'Ravigote (Ro)', 'Ravigotte Sauce (Es)', 'Red Colouring Butter (Es)', 'Red Wine Sauce (Es)', 'Regency Sauce (Es)', 'Remoulade (Ro)', 'Remoulade Sauce (Es)', 'Robert (Ro)', 'Robert Sauce (Es)', 'Rouennaise (Ro)', 'Rouennaise Sauce (Es)', 'Rouille', 'Roux Brown', 'Roux Pale', 'Roux White', 'Royal (Ro)',
-
-  // S
-'Saint-Malo (Ro)', 'Sainte-Menehould (Ro)', 'Salmis Sauce (Es)', 'Sarladaise (Ro)', 'Scotch Egg Sauce (Es)', 'Shallot Butter (Es)', 'Shrimp Butter (Es)', 'Solferino (Ro)', 'Sorrel Sauce (Ro)', 'Soubise (Ro)', 'Soubise Rice Sauce (Es)', 'Soubise Sauce (Es)', 'Soubise Tomatee Sauce (Es)', 'Supreme (Ro)', 'Supreme Sauce (Es)',
-
-  // T
-'Tarragon (Ro)', 'Tarragon Butter (Es)', 'Tartar (Ro)', 'Thickened Gravy (Es)', 'Tomato', 'Tomato Coulis', 'Tomato Purée', 'Tomato Sauce (Es)', 'Tortue (Ro)', 'Tortue Sauce (Es)',
-
-  // V
-'Various Cullises (Es)', 'Veal Gravy Tomate (Es)', 'Veal Veloute', 'Venetian Sauce (Es)', 'Venison Sauce (Es)', 'Veron (Ro)', 'Villageoise', 'Villeroi (Ro)', 'Villeroy Sauce (Es)', 'Villeroy Soubisee Sauce (Es)', 'Villeroy Tomatee Sauce (Es)', 'Vinaigrette (Ro)', 'Vinaigrette Sauce (Es)', 'Vincent Sauce', 'Vincent Sauce (Es)',
-
-  // W
-  'Waterfish Cold (Ro)', 'Waterfish Hot (Ro)', 'White Chaud-Froid Sauce (Es)', 'Wine mustard','White Wine Sauce','Whisked Mayonnaise (Es)', 'White Wine Sauce (Es)',
-
-  // Y
-  'Yorkshire (Ro)',
-
-  // Z
-  'Zingara (Ro)'
-];
-//-----Sort keys------
-ALL_SAUCE_KEYS.sort((a, b) =>
-  a.localeCompare(b, ['uk', 'en'], { sensitivity: 'base' })
-);
+window.SD_KEYS_READY = fetch('./data/keys.json')
+  .then(function (res) {
+    if (!res.ok) throw new Error('Failed to fetch keys.json: ' + res.status);
+    return res.json();
+  })
+  .then(function (keys) {
+    ALL_SAUCE_KEYS.length = 0;
+    keys.forEach(function (k) { ALL_SAUCE_KEYS.push(k); });
+    return ALL_SAUCE_KEYS;
+  })
+  .catch(function (err) {
+    console.error('Failed loading keys.json:', err);
+    throw err;
+  });
 
 //----BANNER ---------
 function randomHeroImage() {
@@ -1282,11 +1226,17 @@ function initApp() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  loadUserData().then(function () {
+  Promise.all([
+    loadUserData(),
+    window.SD_READY,
+    window.SD_KEYS_READY
+  ]).then(function () {
     currentLang = userData.lang || 'en';
     favs = userData.fav;
     notes = userData.nts;
     custom = userData.cst;
     initApp();
+  }).catch(function (err) {
+    console.error('Startup failed:', err);
   });
 });

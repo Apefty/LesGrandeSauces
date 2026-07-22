@@ -1,5 +1,5 @@
 /* <!-- ANDROID VERSION! --> */
-/* build 1.5.4 — 2026-07-21 */
+/* build 1.6.0 — 2026-07-22 */
 /*
   OTA-оновлення через @capgo/capacitor-updater (ручний режим, autoUpdate:false).
   Джерело оновлень — GitHub Releases цього репозиторію (Apefty/French-Sauces).

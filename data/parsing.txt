@@ -1,0 +1,39 @@
+NAME: Test Bearnaisette
+CLASS: Ro
+CATEGORY: Hot Emulsified
+MOTHER: Test Bearnaise
+TYPE: Emulsified
+TEMP: Hot
+BASE: Butter/Egg
+DIFFICULTY: Medium
+TIME: 30 min
+PHOTO: test-bearnaise.jpg
+
+PAIRS_WITH: steak, eggs, asparagus, veal, fish
+
+INGREDIENTS:
+[base] egg yolks (5); clarified butter (250g)
+[aromatics] shallots (50g); tarragon (3 tbsp); chervil (1 tbsp)
+[acid] tarragon vinegar (10cl); dry white wine (5cl)
+[finish] fresh tarragon; chervil; salt; cracked pepper
+
+STEPS:
+1. Reduce vinegar, wine, shallots, tarragon, chervil, pepper by two-thirds. Cool.
+2. Add 5 egg yolks + cold water. Whisk over low heat 55°C.
+3. Remove from heat, gradually incorporate 250g warm clarified butter.
+4. Strain through chinois, finish with fresh tarragon and chervil.
+
+RECIPE: Reduce 10cl tarragon vinegar, 5cl dry white wine... (суцільний абзац rc)
+
+DERIVATIVES: Bearnaise Sauce (Es), Choron (Ro), Choron Sauce (Es), Foyot (Ro), Foyot Sauce (Es), Paloise (Ro)
+SIMILAR: Hollandaise, Foyot, Choron
+
+--- UK ---
+NAME_UK: Соус Тестовий Беарнез
+INGREDIENTS_UK:
+[base] яєчні жовтки (5); перетоплене масло (250г)
+[aromatics] шалот (50г); тархун (3 ст.л.); кервель (1 ст.л.)
+...
+STEPS_UK:
+1. ...
+RECIPE_UK: ...

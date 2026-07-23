@@ -14,7 +14,7 @@ export default {
     ],
     rc: "Reduce red wine and its aromatics by half, then thicken with manied butter — about 85 g per quart of reduced wine. Finish with 115 g of butter per quart. This sauce is regarded chiefly as a domestic preparation for poached, moulded, or hard-boiled eggs.",
 
-    nm_uk: "Соус Бургіньон (Еск)",
+    nm_uk: "Соус Бургундський (Еск)",
     pr_uk: ["Яйця-пашот", "Формовані яйця", "Варені круто яйця"],
     ig_uk: {
       base: ["Червоне вино з прянощами 570 мл"],

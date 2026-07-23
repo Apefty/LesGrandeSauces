@@ -1,91 +1,1250 @@
 /* <!-- ANDROID VERSION! --> */
-/* build 1.6.0 — 2026-07-22 */
+// build 1.6.0 — 2026-07-22
 
-// data/data.js
-// Only lazy-load helpers + fetch bootstrap live here now.
-// Category tree / usage / icon dictionaries live in data/data.json.
-// Each sauce is loaded on demand from data/sauces/<slug>.js
+// ── все читається з window.SD (визначено в data.js) ───────────────────
+var SD; // буде присвоєно після завантаження DOM
 
-window.SD = { r: {} };
+// ── СХОВИЩЕ ДАНИХ КОРИСТУВАЧА ───────────────────────────────────────────
+// В Neutralino — файл userdata.json поруч із застосунком (portable, мандрує з флешкою).
+// В звичайному браузері / Live Server — localStorage (для зручності розробки/тестування).
+var USERDATA_FILE = 'userdata.json';
+var isNeutralino = typeof Neutralino !== 'undefined';
+var userData = { lang: 'en', fav: [], nts: {}, cst: {}, fs: 1 };
 
-window.SD._saucesBasePath = (function () {
-  if (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) {
-    return document.currentScript.src.replace(/[^/]*$/, '') + 'sauces/';
+function loadUserData() {
+  if (isNeutralino) {
+    return Neutralino.filesystem.readFile(USERDATA_FILE)
+      .then(function (content) {
+        try { Object.assign(userData, JSON.parse(content)); }
+        catch (e) { console.warn('userdata.json corrupted, using defaults:', e); }
+      })
+      .catch(function () { /* файлу ще нема при першому запуску — лишаємось на дефолтах */ });
   }
-  return './data/sauces/';
-})();
-
-window.SD._dataJsonPath = (function () {
-  if (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) {
-    return document.currentScript.src.replace(/[^/]*$/, '') + 'data.json';
-  }
-  return './data/data.json';
-})();
-
-function _slug(name) {
-  return String(name)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // é/è/ç etc. → e/e/c (strip accents, keep the base letter)
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_')   // spaces AND hyphens → underscore
-    .replace(/[^a-z0-9_]/g, '');
+  try {
+    userData.lang = localStorage.getItem('lang') || 'en';
+    userData.fav  = JSON.parse(localStorage.getItem('fav') || '[]');
+    userData.nts  = JSON.parse(localStorage.getItem('nts') || '{}');
+    userData.cst  = JSON.parse(localStorage.getItem('cst') || '{}');
+    userData.fs   = parseFloat(localStorage.getItem('fs') || '1');
+  } catch (e) { console.warn('localStorage read failed:', e); }
+  return Promise.resolve();
 }
 
-window.SD.loadSauce = async function (name) {
-  if (!name) throw new Error('sauce name required');
-  if (window.SD.r[name]) return window.SD.r[name];
-  const slug = _slug(name);
-  const path = window.SD._saucesBasePath + slug + '.js';
-  try {
-    const mod = await import(path);
-    const data = mod.default || mod;
-    const key = Object.keys(data)[0];
-    window.SD.r[key] = data[key];
-    return window.SD.r[key];
-  } catch (err) {
-    console.error('Failed loading sauce:', name, path, err);
-    throw err;
+function saveUserData() {
+  if (isNeutralino) {
+    Neutralino.filesystem.writeFile(USERDATA_FILE, JSON.stringify(userData))
+      .catch(function (e) { console.error('Save failed:', e); });
+    return;
   }
+  localStorage.setItem('lang', userData.lang);
+  localStorage.setItem('fav', JSON.stringify(userData.fav));
+  localStorage.setItem('nts', JSON.stringify(userData.nts));
+  localStorage.setItem('cst', JSON.stringify(userData.cst));
+  localStorage.setItem('fs', String(userData.fs));
+}
+
+
+
+// ── LANGUAGE ──────────────────────────────────────────────────────────
+var currentLang = 'en'; // початкове значення, реальне р-реться в loadUserData()/initApp()
+
+// t(key) — UI string translation
+function t(key) {
+  var lang = currentLang === 'uk' ? window.LANG_UK : window.LANG_EN;
+  return lang ? (lang[key] || key) : key;
+}
+
+// tf(sauceObj, field) — sauce DATA field translation
+// returns field+'_uk' if currentLang is 'uk' and it exists, else field
+function tf(s, field) {
+  if (!s) return '';
+  if (currentLang === 'uk' && s[field + '_uk'] !== undefined) {
+    return s[field + '_uk'];
+  }
+  return s[field];
+}
+
+// sName(nm) — переклад "сирої" назви соусу (до завантаження файлу),
+// використовує словник SD.nameUk, зібраний з полів s_uk у data.js
+function sName(nm) {
+  if (currentLang === 'uk' && SD && SD.nameUk && SD.nameUk[nm]) return SD.nameUk[nm];
+  return nm;
+}
+
+// trVal(dict, val) — перекладає значення властивості (tp/tm/df/mo/cl) через словник
+// у lang-файлі; підтримує складові значення типу "Hot, Cold"
+function trVal(dict, val) {
+  if (currentLang !== 'uk' || !val) return val;
+  var lang = window.LANG_UK;
+  var map = lang && lang[dict];
+  if (!map) return val;
+  return String(val).split(/\s*[,/]\s*/).map(function(part) {
+    return map[part] || part;
+  }).join(', ');
+}
+
+// trCat(val) — перекладає назву категорії через словник cat{} з lang-файлу
+function trCat(val) {
+  if (currentLang === 'uk' && window.LANG_UK && window.LANG_UK.cat && window.LANG_UK.cat[val]) {
+    return window.LANG_UK.cat[val];
+  }
+  return val;
+}
+
+// moName(val) — для материнського соусу: спершу пробує як реальну назву соусу (sName),
+// якщо немає — як загальний опис основи (trVal('mo', ...))
+function moName(val) {
+  var n = sName(val);
+  if (n !== val) return n;
+  return trVal('mo', val);
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'en' ? 'uk' : 'en';
+  userData.lang = currentLang;
+  saveUserData();
+  var btn = document.getElementById('lang-label');
+  if (btn) btn.textContent = currentLang === 'uk' ? 'UA' : 'EN';
+  var aboutScr = document.getElementById('s-about');
+  if (aboutScr && aboutScr.classList.contains('active')) showAbout();
+  // Re-render current screen
+  var active = document.querySelector('.scr.active, .screen.active');
+  if (!active) { initApp(); return; }
+  var id = active.id.replace('s-', '');
+  if (id === 'home' || id === 'home') initApp();
+  else if (id === 'hierarchy') bHier();
+  else if (id === 'usage') bUsage();
+  else if (id === 'technique') bTech();
+  else if (id === 'favs') bFavs();
+  else if (id === 'all') bAll();
+  else if (id === 'sauce' && cur) openSauce(cur, false);
+}
+
+function showAbout() {
+  var body = document.getElementById('abb');
+  if (!body) return;
+  var isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); 
+
+  /* FOR LIVE SERVER DEBUGGING ONLY! COMMENT BLOCK BEFORE... */
+  // var isNativeApp = true;
+  // ТИМЧАСОВО для дизайну в Live Server — повернути назад...
+ 
+ 
+  body.innerHTML =
+  '<div class="about">'
+    + '<h2 class="">' + x(t('app_title')) + '</h2>'
+    + '<div class="about-version">' + x(t('about_version')) + '</div>'
+    + '<div class="about-desc">' + x(t('about_desc')).replace(/\n/g, '<br>') + '</div>'
+    + '<div class="about-credits">' + x(t('about_credits')) + '</div>'
+    + '<div class="about-image"><img src="./icons/paniot.png" alt="Paniot"></div>'
+    + '<div class="about-copyright">&copy; 2026 Παναγιώτης</div>'
+    + (isNativeApp
+      ? '<div class="about-update">'
+        + '<button class="about-update-btn" id="about-update-btn" onclick="checkAppUpdateFromAbout()">' + x(t('about_check_update')) + '</button>'
+        + '<div class="about-update-status" id="about-update-status"></div>'
+        + '</div>'
+  +'</div>'
+      : '');
+  showS('about', x(t('about_title')));
+}
+
+function checkAppUpdateFromAbout() {
+  var statusEl = document.getElementById('about-update-status');
+  var btnEl = document.getElementById('about-update-btn');
+  if (!window.OTA || !window.OTA.checkForUpdate) return;
+  if (btnEl) btnEl.disabled = true;
+  window.OTA.checkForUpdate({
+    force: true,
+    onStatus: function (status) {
+      if (!statusEl) return;
+      if (status === 'checking') statusEl.textContent = t('about_checking');
+      else if (status === 'up_to_date') { statusEl.textContent = t('about_up_to_date'); if (btnEl) btnEl.disabled = false; }
+      else if (status === 'downloading') statusEl.textContent = t('about_update_downloading');
+      else if (status === 'updated') statusEl.textContent = t('about_update_applied');
+      else if (status === 'error') { statusEl.textContent = t('about_update_error'); if (btnEl) btnEl.disabled = false; }
+    }
+  });
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────
+var stk = ['home'], cur = null, noteEditing = false, editKey = null, photoData = {};
+var sauceHistory = []; // ключі соусів, щоб коректно повертатись "назад" при переходах соус→соус
+var favs = [], notes = {}, custom = {}; // реальні значення підставляються в startApp() після loadUserData()
+var ntTimer = null;
+
+function allR() { return Object.assign({}, SD.r, custom); }
+
+// ── TECHNIQUE GROUPS ──────────────────────────────────────────────────
+var TG = {};
+function rebuildTG() {
+  TG = {'Emulsified (Hot)':[],'Emulsified (Cold)':[],'Roux-based':[],'Reduction':[],'Tomato-based':[],'Fruit-based':[],'Unstable Emulsion':[],'Dessert':[]};
+  Object.entries(allR()).forEach(function(e) {
+    var k = e[0], s = e[1];
+    if (s.tp === 'Emulsified') TG[s.tm === 'Hot' ? 'Emulsified (Hot)' : 'Emulsified (Cold)'].push(k);
+    else if (s.tp === 'Cold Emulsified') TG['Emulsified (Cold)'].push(k);
+    else if (TG[s.tp]) TG[s.tp].push(k);
+  });
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────────────
+var TITLES = {
+  home:'French Sauces', hierarchy:'Sauce Hierarchy', usage:'By Dish / Product',
+  technique:'By Technique', sublist:'Sauces', sauce:'Sauce',
+  favs:'Saved Sauces', form:'Add Sauce', about:'About', glossary:'Glossary'
 };
 
-window.SD.loadSauces = async function (list) {
-  if (!Array.isArray(list)) return Promise.reject(new Error('provide array of sauce names'));
-  return Promise.all(list.map(n => window.SD.loadSauce(n)));
+function showS(id, title, push) {
+  if (push !== false) stk.push(id);
+  var all = document.querySelectorAll('.scr');
+  for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+  document.getElementById('s-' + id).classList.add('active');
+
+  var R = allR();
+  var htText;
+  if (id === 'sauce' && cur && R[cur]) {
+    // Show category name in header instead of sauce name
+    var s = R[cur];
+    var catNm = s.cat || '';
+    if (currentLang === 'uk' && window.LANG_UK && window.LANG_UK.cat && window.LANG_UK.cat[catNm]) {
+      catNm = window.LANG_UK.cat[catNm];
+    }
+    htText = catNm;
+  } else {
+    htText = title || TITLES[id] || id;
+  }
+  document.getElementById('ht').textContent = htText;
+  var bbEl = document.getElementById('bb');
+  if (bbEl) bbEl.style.display = stk.length > 1 ? '' : 'none';
+  var bfhEl = document.getElementById('bfh');
+  if (bfhEl) bfhEl.style.display = id === 'sauce' ? '' : 'none';
+  var badEl = document.getElementById('bad');
+  if (badEl) badEl.style.display = id === 'form' ? 'none' : '';
+
+  ['home','hierarchy','usage','favs','all','glossary'].forEach(function(n) {
+    var el = document.getElementById('nb-' + n);
+    if (el) el.classList.toggle('on', n === id);
+  });
+  updFavIco();
+}
+
+function navTo(id) {
+  stk = [id];
+  sauceHistory = [];
+  if (id === 'hierarchy') bHier();
+  if (id === 'usage') bUsage();
+  if (id === 'technique') bTech();
+  if (id === 'favs') bFavs();
+  if (id === 'glossary') bGlossary();
+  showS(id, null, false);
+  if (id === 'all') bAll();
+}
+
+function goBack() {
+  if (stk.length <= 1) return;
+  var poppedId = stk.pop();
+  var id = stk[stk.length - 1];
+
+  if (poppedId === 'sauce' && id === 'sauce' && sauceHistory.length) {
+    var prevKey = sauceHistory.pop();
+    openSauce(prevKey, false);
+    document.getElementById('bb').style.display = stk.length > 1 ? '' : 'none';
+    ['home','hierarchy','usage','favs','all','glossary'].forEach(function(n) {
+      var el = document.getElementById('nb-' + n);
+      if (el) el.classList.toggle('on', n === id);
+    });
+    return;
+  }
+
+  var all = document.querySelectorAll('.scr');
+  for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+  document.getElementById('s-' + id).classList.add('active');
+  var R = allR();
+  var t = id === 'sauce' && cur ? (R[cur] ? R[cur].nm : 'Sauce') : TITLES[id] || id;
+  document.getElementById('ht').textContent = t;
+  document.getElementById('bb').style.display = stk.length > 1 ? '' : 'none';
+  document.getElementById('bfh').style.display = id === 'sauce' ? '' : 'none';
+ var badEl = document.getElementById('bad'); if (badEl) badEl.style.display = id === 'form' ? 'none' : '';
+  ['home','hierarchy','usage','favs','all','glossary'].forEach(function(n) {
+    var el = document.getElementById('nb-' + n);
+    if (el) el.classList.toggle('on', n === id);
+  });
+  updFavIco();
+  if (id === 'all') bAll();
+}
+
+// ── SEARCH ─────────────────────────────────────────────────────────────
+function onSearch(v) {
+  updateClearButton('sq');
+
+  var q = v.trim().toLowerCase();
+  var res = document.getElementById('sr');
+  var main = document.getElementById('hm');
+
+  if (!q) {
+    res.style.display = 'none';
+    res.innerHTML = '';
+    main.style.display = '';
+    return;
+  }
+
+  res.style.display = 'block';
+  main.style.display = 'none';
+
+  var R = allR();
+  var ukCat = (window.LANG_UK && window.LANG_UK.cat) || {};
+  var ukMo  = (window.LANG_UK && window.LANG_UK.mo)  || {};
+
+  var ms = Object.keys(R).filter(function(k) {
+    var s = R[k];
+    var ingr   = Object.values(s.ig    || {}).reduce(function(a,b){ return a.concat(b); }, []);
+    var ingrUk = Object.values(s.ig_uk || {}).reduce(function(a,b){ return a.concat(b); }, []);
+
+    return [s.nm, s.nm_uk, s.fr, s.cat, ukCat[s.cat], s.mo, ukMo[s.mo], s.rc || '', s.rc_uk || '']
+      .concat(s.pr || [], s.pr_uk || [])
+      .concat(ingr, ingrUk)
+      .join(' ')
+      .toLowerCase()
+      .indexOf(q) !== -1;
+  });
+
+  if (!ms.length) {
+    res.innerHTML = '<div class="search-empty">' + t('search_no_results') + ' <b>' + x(v) + '</b></div>';
+    return;
+  }
+
+  function nameRank(k) {
+    var s = R[k];
+    var nameEn = (s.nm || '').toLowerCase();
+    var nameUk = (s.nm_uk || '').toLowerCase();
+
+    if (nameEn === q || nameUk === q) return 0;
+    if (nameEn.indexOf(q) === 0 || nameUk.indexOf(q) === 0) return 1;
+    if (nameEn.indexOf(q) !== -1 || nameUk.indexOf(q) !== -1) return 2;
+
+    return 3;
+  }
+
+  ms = ms.map(function(k) {
+      return { k: k, r: nameRank(k) };
+    })
+    .sort(function(a, b) {
+      return a.r - b.r;
+    })
+    .map(function(o) {
+      return o.k;
+    });
+
+  var firstOtherIdx = -1;
+
+  for (var i = 0; i < ms.length; i++) {
+    if (nameRank(ms[i]) === 3) {
+      firstOtherIdx = i;
+      break;
+    }
+  }
+
+  res.innerHTML = ms.map(function(k, i) {
+    var s = R[k];
+    var sep = (i === firstOtherIdx)
+      ? '<div class="sres-sep">' + t('search_also_in') + '</div>'
+      : '';
+
+    return sep +
+      '<div class="sri" onclick="openSauce(\'' + jsq(k) + '\')">' +
+      '<div class="sri-ico">' + (SD.cico[s.cat] || '🍶') + '</div>' +
+      '<div><div class="sri-n">' + x(sName(s.nm)) + '</div>' +
+      '<div class="sri-c">' + x(trCat(s.cat)) + ' · ' + x(trVal("tp", s.tp)) + '</div></div>' +
+      '<span style="margin-left:auto;color:var(--border)">›</span></div>';
+  }).join('');
+}
+function clearSearch(inputId, renderFn) {
+  var input = document.getElementById(inputId);
+
+  input.value = '';
+  updateClearButton(inputId);
+
+  renderFn('');
+  input.focus();
+}
+function updateClearButton(inputId) {
+  var input = document.getElementById(inputId);
+  var clear = document.getElementById(inputId + '-clear');
+  if (clear) clear.style.display = input.value ? 'flex' : 'none';
+}
+// ── SEARCH KEY ─────────────────────────────────────────────────────────
+function fKey(nm) {
+  var R = allR();
+  var l = nm.toLowerCase();
+  return Object.keys(R).find(function(k) {
+    return k.toLowerCase() === l
+      || R[k].nm.toLowerCase() === l;
+  }) || null;
+}
+
+// ── HIERARCHY ──────────────────────────────────────────────────────────
+function bHier() {
+  var ck = Object.keys(custom);
+  var html = SD.cats.map(function(cat, ci) {
+    var catNm = (currentLang === 'uk' && cat.nm_uk) ? cat.nm_uk : cat.nm;
+    return '<div class="cg">'
+      + '<div class="ch" onclick="tC(' + ci + ')">'
+      + '<div class="cico">' + cat.ic + '</div>'
+      + '<div class="cnm"><div class="cnm-m">' + catNm + '</div>'
+      + '<div class="cnm-f">' + cat.fr + '</div></div>'
+      + '<span class="chev" id="ca' + ci + '">›</span></div>'
+      + '<div class="csl" id="cl' + ci + '">'
+      + cat.subs.map(function(sub, si) {
+        var subNm = (currentLang === 'uk' && sub.nm_uk) ? sub.nm_uk : sub.nm;
+        return '<div class="csi">'
+          + '<div class="csh" onclick="tS(' + ci + ',' + si + ')">'
+          + '<div><div class="csnm">' + subNm + '</div>'
+          + '<div class="csmo">' + sub.mo + '</div></div>'
+          + '<span class="csch" id="sa' + ci + '_' + si + '">›</span></div>'
+          + '<div class="ssl" id="sl' + ci + '_' + si + '">'
+          + sub.s.map(function(nm) {
+            var rk = fKey(nm);
+            var callKey = rk || nm;
+            return '<div class="sli" onclick="openSauce(\'' + jsq(callKey) + '\')">'
+              + '<div class="sld"></div>'
+              + '<div class="sln">' + x(sName(nm)) + '</div>'
+              + '<span class="slt">›</span>'
+              + '</div>';
+          }).join('')
+          + '</div></div>';
+      }).join('')
+      + '</div></div>';
+  }).join('');
+
+  // My Sauces block — hidden for now, custom sauces appear in their own category
+  // if (ck.length) { ... }
+
+  document.getElementById('hb').innerHTML = html;
+}
+function tCC() { tog('clC','caC'); }
+function tC(ci) { tog('cl'+ci,'ca'+ci); }
+function tS(ci,si) { tog('sl'+ci+'_'+si,'sa'+ci+'_'+si); }
+function tog(listId, arrowId) {
+  document.getElementById(listId).classList.toggle('op');
+  document.getElementById(arrowId).classList.toggle('op');
+}
+
+// ── BY DISH ───────────────────────────────────────────────────────────
+function bUsage() {
+  document.getElementById('ub').innerHTML = '<div class="list-body">'
+    + Object.keys(SD.usage).map(function(cat) {
+      var sauces = SD.usage[cat];
+      var catLabel = (currentLang === 'uk' && LANG_UK && LANG_UK.usage_cats && LANG_UK.usage_cats[cat]) ? LANG_UK.usage_cats[cat] : cat;
+      return '<div class="li" onclick="showSL(\'' + x(cat) + '\',' + attrJson(sauces) + ')">'
+        + '<div class="li-ico">' + (SD.uico[cat] || '🍶') + '</div>'
+        + '<div class="li-n">' + catLabel + '</div>'
+        + '<span class="li-count">' + sauces.length + '</span>'
+        + '<span class="li-ar">›</span></div>';
+    }).join('') + '</div>';
+}
+
+// ── BY TECHNIQUE ──────────────────────────────────────────────────────
+function bTech() {
+  rebuildTG();
+  document.getElementById('tb').innerHTML = '<div class="list-body">'
+    + Object.keys(TG).filter(function(nm) { return TG[nm].length; }).map(function(nm) {
+      var sauces = TG[nm];
+      var techLabel = (currentLang === 'uk' && LANG_UK && LANG_UK.tech_types && LANG_UK.tech_types[nm]) ? LANG_UK.tech_types[nm] : nm;
+      return '<div class="li" onclick="showSLK(\'' + x(nm) + '\',' + attrJson(sauces) + ')">'
+        + '<div class="li-ico">' + (SD.tico[nm] || '🍶') + '</div>'
+        + '<div class="li-n">' + techLabel + '</div>'
+        + '<span class="li-count">' + sauces.length + '</span>'
+        + '<span class="li-ar">›</span></div>';
+    }).join('') + '</div>';
+}
+
+function showSL(title, items) {
+  window._slItems = items; window._slMode = 'names';
+  renderSublist();
+  showS('sublist', title);
+}
+
+function showSLK(title, keys) {
+  window._slItems = keys; window._slMode = 'keys';
+  renderSublist();
+  showS('sublist', title);
+}
+
+function renderSublist() {
+  var R = allR();
+  var items = window._slItems || [];
+  var keys = (window._slMode === 'keys') ? items : items.map(function(nm) { return fKey(nm) || nm; });
+  keys = sortSauceKeys(keys, R, sortModeSublist);
+  document.getElementById('slb').innerHTML = '<div class="list-body">'
+    + keys.map(function(k) {
+      var s = R[k];
+      var nm = s ? sName(s.nm) : k;
+      var cat = s ? s.cat : '';
+      return '<div class="li" onclick="openSauce(\'' + jsq(x(k)) + '\')">'
+        + '<div style="flex:1"><div class="li-n">' + x(nm) + '</div>'
+        + (cat ? '<div class="li-s">' + x(trCat(cat)) + '</div>' : '') + '</div>'
+        + '<span class="li-ar">›</span></div>';
+    }).join('') + '</div>';
+}
+
+// ── SAVED ─────────────────────────────────────────────────────────────
+function bFavs() {
+  var b = document.getElementById('fb2');
+  var R = allR();
+  if (!favs.length) {
+    b.innerHTML = '<div class="fe"><div class="empty-ico"><span class="iconify" data-icon="mdi:heart"></span></div><p class="empty-text">No saved sauces yet.<br>Open any sauce and tap <span class="iconify" data-icon="mdi:heart-outline"></span> to save.</p></div>';
+    return;
+  }
+  b.innerHTML = '<div class="list-body">'
+    + favs.map(function(k) {
+      var s = R[k]; if (!s) return '';
+      return '<div class="li" onclick="openSauce(\'' + jsq(k) + '\')">'
+        + '<div style="flex:1"><div class="li-n">' + x(s.nm) + '</div>'
+        + '<div class="li-s">' + x(trCat(s.cat)) + (notes[k] ? ' · 📝' : '') + '</div></div>'
+        + '<span class="li-ar">›</span></div>';
+    }).join('') + '</div>';
+}
+// ── GLOSSARY ───────────────────────────────────────────────────────────
+function bGlossary(q) {
+  var glb = document.getElementById('glb');
+  if (!glb) return;
+  var query = (q !== undefined ? q : (document.getElementById('glq') || {}).value || '').trim().toLowerCase();
+
+  var list = (typeof GLOSSARY !== 'undefined' ? GLOSSARY : []);
+  var filtered = !query ? list : list.filter(function(g) {
+    var termHay = [g.term_en, g.term_uk, g.fr].filter(Boolean).join(' ').toLowerCase();
+    var defHay = (g.defs || []).map(function(d) {
+      return [d.def_en, d.def_uk].filter(Boolean).join(' ');
+    }).join(' ').toLowerCase();
+    return (termHay + ' ' + defHay).indexOf(query) !== -1;
+  });
+
+  if (!filtered.length) {
+    glb.innerHTML = '<div class="search-empty">' + t('search_no_results') + ' <b>' + x(q || '') + '</b></div>';
+    return;
+  }
+
+  glb.innerHTML = '<div class="lb">' + filtered.map(function(g) {
+    var term = currentLang === 'uk' && g.term_uk ? g.term_uk : g.term_en;
+    var defsHtml = (g.defs || []).map(function(d, i) {
+      var def = currentLang === 'uk' && d.def_uk ? d.def_uk : d.def_en;
+      var num = (g.defs.length > 1) ? '<span class="gl-def-num">' + (i + 1) + '.</span>' : '';
+      return '<div class="gl-def">' + num + x(def) + '</div>';
+    }).join('');
+
+var frHtml = g.fr ? '<div class="gl-fr">' + x(g.fr) + '</div>' : '';
+    return '<div class="gl-item"><div class="gl-term">' + x(term) + '</div>' + frHtml + defsHtml + '</div>';
+  }).join('') + '</div>';
+}
+
+// ── SAUCE CARD ──────────────────────────────────────────────────────
+async function openSauce(key, push) {
+  var R = allR();
+  var s = R[key];
+  if (!s) {
+    // try fKey lookup first (name->key mapping)
+    var mapped = fKey(key);
+    if (mapped && mapped !== key) { key = mapped; s = R[key]; }
+  }
+  if (!s) {
+    try {
+      await window.SD.loadSauce(key);
+    } catch(e) {
+      console.error('Failed to load sauce', key, e);
+      return;
+    }
+    R = allR();
+    // after load, key in file might differ from requested name
+    if (!R[key]) {
+      var mapped2 = fKey(key);
+      if (mapped2) key = mapped2;
+    }
+    s = R[key];
+    if (!s) return;
+  }
+  if (push !== false && cur) sauceHistory.push(cur);
+  cur = key;
+  var fav = favs.indexOf(key) !== -1;
+  var isCust = !!custom[key];
+  var nt = notes[key] || '';
+  var photoBase = s.photo || ('./image/' + key.toLowerCase().replace(/\s+/g,'_'));
+  var photo = photoBase.match(/\.(jpg|png|webp)$/i) ? photoBase : photoBase + '.jpg';
+  var nm = tf(s, 'nm');
+  var pr = tf(s, 'pr') || [];
+  var ig = tf(s, 'ig') || {};
+  var st = tf(s, 'st') || [];
+  var rc = tf(s, 'rc') || '';
+
+  // Breadcrumbs
+  var bc = '';
+  if (s.mo && s.mo !== '—' && s.mo !== s.nm) {
+    var moKey = fKey(s.mo);
+    if (moKey && moKey !== key) {
+      bc += '<span class="bci" onclick="openSauce(\'' + jsq(moKey) + '\')">' + x(moName(s.mo)) + '</span>'
+        + '<span class="bcs"><span class="iconify" data-icon="tdesign:chevron-right-double-s" data-width="28px"></span></span>';
+    } else {
+      bc += '<span class="bci plain">' + x(moName(s.mo)) + '</span><span class="bcs"><span class="iconify" data-icon="tdesign:chevron-right-double-s" data-width="28px"></span></span>';
+    }
+  }
+  bc += '<span class="bci current">' + x(nm) + '</span>';
+
+  // Ingredients
+  var ingr = '';
+  if (ig) {
+    var groups = Object.keys(ig).filter(function(g) { return ig[g] && ig[g].length; });
+    if (groups.length) {
+      ingr = '<div class="ig">'
+        + groups.map(function(g) {
+          return '<div class="igg"><div class="igg-title">' + t('ig_' + g) + '</div>'
+            + ig[g].map(function(i) { return '<div class="igi">' + x(i) + '</div>'; }).join('')
+            + '</div>';
+        }).join('') + '</div>';
+    }
+  }
+
+  // Steps
+  var stps = '';
+  if (st && st.length) {
+    stps = st.map(function(t2, i) {
+      return '<div class="stp"><div class="stp-num">' + (i+1) + '</div>'
+        + '<div class="stp-text">' + x(t2) + '</div></div>';
+    }).join('');
+  }
+
+  // Derivatives
+  var deriv = '';
+  if (s.dv && s.dv.length) {
+    deriv = '<div class="dt"><div class="dtm">' + x(nm) + '</div>'
+      + '<div class="dtl"></div><div class="dtc">'
+      + s.dv.map(function(d) {
+        var dk = fKey(d);
+        var callKey = dk || d;
+        return '<div class="dtch' + (dk === key ? ' current' : '') + '"'
+          + ' onclick="openSauce(\'' + jsq(callKey) + '\')">' + x(R[dk] ? tf(R[dk], 'nm') : sName(d)) + '</div>';
+      }).join('') + '</div></div>';
+  }
+
+  // Similar
+  var sim = '';
+  if (s.sm && s.sm.length) {
+    sim = '<div class="rl">'
+      + s.sm.filter(function(n) { return n !== s.nm; }).map(function(n) {
+          var sk = fKey(n);
+          var callKey = sk || n;
+          return '<div class="rli" onclick="openSauce(\'' + jsq(callKey) + '\')">'
+            + '<span>' + x(R[sk] ? tf(R[sk], 'nm') : sName(n)) + '</span>'
+            + '</div>';
+        }).join('') + '</div>';
+  }
+
+  document.getElementById('sab').innerHTML =
+    '<div class="sauce-hero">'
+    + (photo ? '<img class="sauce-hero-img" src="' + photo + '" alt="" onload="sizeSauceHero(this)" onerror="if(this.src.indexOf(\'.jpg\')>-1){this.src=this.src.replace(\'.jpg\',\'.png\')}else{this.style.display=\'none\'}">' : '<div class="sauce-hero-img-placeholder"></div>')
+    + '<div class="sauce-hero-body">'
+
+    + (isCust ? '<span class="cbadge">custom</span>' : '') + '</div>'
+    + '<div class="stit">' + x(nm) + '</div>'
+    + (s.fr && s.fr !== nm ? '<div class="stit-fr">' + x(s.fr) + '</div>' : '')
+    + '</div></div>'
+
+    + '<div class="ssec"><div class="ssec-title">' + t("sec_classification") + '</div>'
+    + '<div class="breadcrumbs">' + bc + '</div></div>'
+
+    + '<div class="ssec"><div class="ssec-title">' + t("sec_properties") + '</div>'
+    + '<div class="mg">'
+    + cell(t('meta_type'), trVal('tp', s.tp)) + cell(t('meta_temp'), trVal('tm', s.tm)) + cell(t('meta_diff'), trVal('df', s.df))
+    + cell(t('meta_time'), tf(s, 'ti')) + cell(t('meta_base'), tf(s, 'bs'))
+    // + cell(t('meta_classic'), trVal('cl', s.cl))
+    + cell(t('meta_classic'), trVal('cl', s.cl), 'mv-classic')
+    + '</div></div>'
+
+    + (pr && pr.length ? '<div class="ssec"><div class="ssec-title">' + t("sec_pairs") + '</div>'
+      + '<div class="tgs">' + pr.map(function(p) { return '<span class="tg">' + x(p) + '</span>'; }).join('') + '</div></div>' : '')
+
+    + (ingr ? '<div class="ssec"><div class="ssec-title">' + t('sec_ingredients') + '</div>' + ingr + '</div>' : '')
+    + (stps ? '<div class="ssec"><div class="ssec-title">' + t('sec_technique') + '</div>' + stps + '</div>' : '')
+    + (rc ? '<div class="ssec"><div class="ssec-title">' + t('sec_recipe') + '</div><div class="rb"><div class="rt">' + x(rc) + '</div></div></div>' : '')
+    + (deriv ? '<div class="ssec"><div class="ssec-title">' + t('sec_derivatives') + '</div>' + deriv + '</div>' : '')
+    + (sim ? '<div class="ssec"><div class="ssec-title">' + t('sec_similar') + '</div>' + sim + '</div>' : '')
+
+    + '<div class="ssec"><div class="ssec-title">' + t('sec_notes') + '</div>'
+    + '<div class="nview' + (nt ? '' : ' empty') + '" id="notes-view">' + (nt ? x(nt) : t('notes_empty')) + '</div>'
+    + '<textarea class="notes-edit-area" id="notes-ta" placeholder="' + t('ph_notes') + '" style="display:none"></textarea>'
+    + '<div class="notes-buttons">'
+    + '<button class="ab btn-note-edit" id="btn-note-edit" onclick="toggleNote()">' + t('notes_edit') + '</button>'
+    + '<button class="ab btn-note-save" id="btn-note-save" onclick="saveNote(\'' + jsq(key) + '\')">✓ ' + t('notes_save') + '</button>'
+    + '</div></div>'
+
+    + '<div class="ssec"><div class="ar">'
+    + '<button class="ab btn-save' + (fav ? ' on' : '') + '" id="btn-fav-card" onclick="toggleFav()">' + (fav ? '<span class="iconify" data-icon="mdi:heart"></span> ' + t('btn_in_favs') : '<span class="iconify" data-icon="mdi:heart-outline"></span> ' + t('btn_add_favs')) + '</button>'
+
+    + (isCust ? '<button class="ab ab-dlete" onclick="doDelete(\'' + jsq(key) + '\')">🗑</button>' : '')
+    + '</div></div>'
+    + '<div style="height:40px"></div>';
+
+  document.getElementById('sab').scrollTop = 0;
+  if (push !== false) showS('sauce', null);
+  else {
+    var catNm = s.cat || '';
+    if (currentLang === 'uk' && window.LANG_UK && window.LANG_UK.cat && window.LANG_UK.cat[catNm]) {
+      catNm = window.LANG_UK.cat[catNm];
+    }
+    document.getElementById('ht').textContent = catNm;
+  }
+  updFavIco();
+}
+
+function cell(label, val, extraClass) {
+  return '<div class="mi"><div class="ml">' + label + '</div>'
+    + '<div class="mvue' + (extraClass ? ' ' + extraClass : '') + '">' + x(val || '—') + '</div></div>';
+}
+
+// ── NOTES ───────────────────────────────────────────────────────────
+function toggleNote() {
+  noteEditing = !noteEditing;
+  var view = document.getElementById('notes-view');
+  var ta = document.getElementById('notes-ta');
+  var btnE = document.getElementById('btn-note-edit');
+  var btnS = document.getElementById('btn-note-save');
+  if (!view || !ta || !btnE || !btnS) return;
+  if (noteEditing) {
+    view.style.display = 'none';
+    ta.style.display = 'block';
+    ta.value = notes[cur] || '';
+    ta.focus();
+    btnE.textContent = '✕ Cancel';
+    btnS.style.display = 'flex';
+  } else {
+    view.style.display = '';
+    ta.style.display = 'none';
+    btnE.textContent = t('notes_edit');
+    btnS.style.display = 'none';
+  }
+}
+
+function saveNote(key) {
+  var ta = document.getElementById('notes-ta');
+  var view = document.getElementById('notes-view');
+  if (!ta || !view) return;
+  var val = ta.value.trim();
+  notes[key] = val;
+  saveUserData();
+  view.textContent = val || t('notes_empty');
+  view.className = 'nview' + (val ? '' : ' empty');
+  toggleNote();
+  toast('Notes saved ✓');
+}
+
+// ── FAVORITES ──────────────────────────────────────────────────────────
+function updFavIco() {
+  var btn = document.getElementById('bfh');
+  if (!btn || !cur) return;
+  btn.innerHTML = favs.indexOf(cur) !== -1 ? '<span class="iconify" data-icon="mdi:heart"></span>' : '<span class="iconify" data-icon="mdi:heart-outline"></span>';
+}
+
+function toggleFav() {
+  if (!cur) return;
+  var i = favs.indexOf(cur);
+  if (i === -1) favs.push(cur); else favs.splice(i, 1);
+  saveUserData();
+  updFavIco();
+  var btn = document.getElementById('btn-fav-card');
+  if (btn) { var f = favs.indexOf(cur) !== -1; btn.className = 'ab btn-save' + (f ? ' on' : ''); btn.innerHTML = f ? '<span class="iconify" data-icon="mdi:heart"></span> ' + t('btn_in_favs') : '<span class="iconify" data-icon="mdi:heart-outline"></span> ' + t('btn_add_favs'); }
+}
+
+// ── DELETION ─────────────────────────────────────────────────────────
+function doDelete(key) {
+  if (!confirm('Delete this sauce?')) return;
+  delete custom[key];
+  saveUserData();
+  rebuildTG();
+  toast('Sauce deleted');
+  goBack();
+}
+
+// ── FORM ─────────────────────────────────────────────────────────────
+var CATS = ['White Sauces','Brown Sauces','Hot Emulsified','Cold Emulsified','Cold Sauces','Dessert Sauces'];
+var TYPES = ['Emulsified','Cold Emulsified','Roux-based','Reduction','Tomato-based','Fruit-based','Unstable Emulsion','Dessert'];
+var TEMPS = ['Hot','Cold','Hot/Cold'];
+var DIFFS = ['Easy','Medium','Hard'];
+
+async function editSauce(nm) {
+  // Try to find by key first
+  var k = fKey(nm);
+  if (!k) {
+    // Try loading by name slug
+    try { await window.SD.loadSauce(nm); } catch(e) {}
+    k = fKey(nm);
+  }
+  openForm(k || '');
+}
+
+function openForm(key) {
+  editKey = key;
+  var R = allR();
+  var s = key ? R[key] : null;
+  photoData = {};
+
+  function sel(opts, val) {
+    return opts.map(function(o) { return '<option' + (o === val ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+  }
+  function dynList(id, items) {
+    return '<div class="dl" id="' + id + '">'
+      + (items.length ? items : ['']).map(function(v, i) { return dynRow(id, v, i); }).join('')
+      + '</div><button class="dra" onclick="addRow(\'' + id + '\')">+ Add item</button>';
+  }
+  var existPhoto = s && s.photo ? '<img class="photo-preview" id="photo-prev" src="' + s.photo + '" alt="">' : '';
+
+  document.getElementById('fb3').innerHTML =
+    '<div class="fs"><div class="fs-title">Photo</div>'
+    + '<div class="fpa" id="fpa">'
+    + (existPhoto || '<div class="photo-ico"><span class="iconify" data-icon="bytesize:photo" data-width="64"></span></div><span class="photo-hint">Tap to upload</span>')
+    + '<input type="file" accept="image/*" onchange="handlePhoto(this)"></div></div>'
+
+    + '<div class="fs"><div class="fs-title">Basic information</div>'
+    + frow(t('label_name_en'), '<input id="f-nm" value="' + x(s ? s.nm : '') + '" placeholder="e.g. Bearnaise Sauce">')
+    + frow(t('label_name_fr'), '<input id="f-fr" value="' + x(s ? s.fr : '') + '" placeholder="e.g. Sauce Bearnaise">')
+    + frow(t('label_mother'), '<input id="f-mo" value="' + x(s ? s.mo : '') + '" placeholder="e.g. Béarnaise, Hollandaise">')
+    + '<div class="form-2col">'
+    + frow(t('label_category'), '<select id="f-cat">' + sel(CATS, s ? s.cat : '') + '</select>')
+    + frow(t('meta_classic'), '<input id="f-cl" value="' + x(s ? (s.cl || '') : '') + '" placeholder="Escoffier, Bocuse, Robuchon...">')
+    + '</div></div>'
+
+    + '<div class="fs"><div class="fs-title">Properties</div>'
+    + '<div class="form-2col">'
+    + frow(t('label_type'), '<select id="f-tp">' + sel(TYPES, s ? s.tp : '') + '</select>')
+    + frow(t('label_temp'), '<select id="f-tm">' + sel(TEMPS, s ? s.tm : '') + '</select>')
+    + '</div><div class="form-2col">'
+    + frow(t('label_diff'), '<select id="f-df">' + sel(DIFFS, s ? s.df : '') + '</select>')
+    + frow(t('label_time'), '<input id="f-ti" value="' + x(s ? s.ti : '') + '" placeholder="30 min">')
+    + '</div>'
+    + frow(t('label_base'), '<input id="f-bs" value="' + x(s ? s.bs : '') + '" placeholder="e.g. Butter/Egg">')
+    + '</div>'
+
+    + '<div class="fs"><div class="fs-title">Ingredients</div>'
+    + ['base','aromatics','acid','finish'].map(function(g) {
+      return frow(t('ig_' + g), dynList('ig-'+g, s && s.ig && s.ig[g] ? s.ig[g] : []));
+    }).join('') + '</div>'
+
+    + '<div class="fs"><div class="fs-title">Technique stps</div>'
+    + dynList('f-st', s && s.st ? s.st : [])
+    + '</div>'
+
+    + '<div class="fs"><div class="fs-title">Full recipe</div>'
+    + frow('', '<textarea id="f-rc" rows="5" placeholder="Full recipe text…">' + x(s ? s.rc : '') + '</textarea>')
+    + '</div>'
+
+    + '<div class="fs"><div class="fs-title">Relations</div>'
+    + frow(t('label_pairs'), '<input id="f-pr" value="' + x(s && s.pr ? s.pr.join(', ') : '') + '">')
+    + frow(t('label_derivatives'), '<input id="f-dv" value="' + x(s && s.dv ? s.dv.join(', ') : '') + '">')
+    + frow(t('label_similar'), '<input id="f-sm" value="' + x(s && s.sm ? s.sm.join(', ') : '') + '">')
+    + '</div>'
+
+    + '<div class="fa">'
+    + '<button class="form-cancel" onclick="goBack()">Cancel</button>'
+    + '<button class="form-save" onclick="saveSauce()">✓ ' + (key ? t('btn_save_changes') : t('btn_add_catalog')) + '</button>'
+    + '</div>';
+
+  showS('form', key ? t('title_form_edit') : t('title_form_add'));
+}
+
+function frow(label, input) {
+  return '<div class="fr2">' + (label ? '<label>' + label + '</label>' : '') + input + '</div>';
+}
+function dynRow(listId, val, idx) {
+  return '<div class="dr" id="dr-' + listId + '-' + idx + '">'
+    + '<input value="' + x(val) + '" placeholder="…">'
+    + '<button class="dyn-del" onclick="delRow(\'' + listId + '\',' + idx + ')">✕</button></div>';
+}
+function addRow(listId) {
+  var c = document.getElementById(listId);
+  var idx = c.children.length;
+  var div = document.createElement('div');
+  div.innerHTML = dynRow(listId, '', idx);
+  c.appendChild(div.firstChild);
+}
+function delRow(listId, idx) {
+  var el = document.getElementById('dr-' + listId + '-' + idx);
+  if (el) el.remove();
+}
+function getRows(listId) {
+  var c = document.getElementById(listId); if (!c) return [];
+  return Array.from(c.querySelectorAll('input')).map(function(i) { return i.value.trim(); }).filter(Boolean);
+}
+
+function handlePhoto(inp) {
+  var file = inp.files[0]; if (!file) return;
+  var img = new Image();
+  img.onload = function() {
+    var MAX = 800, w = img.width, h = img.height;
+    if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; } }
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    photoData.data = c.toDataURL('image/jpeg', 0.75);
+    var area = document.getElementById('fpa');
+    var prev = document.getElementById('fpp');
+    if (!prev) { area.innerHTML = '<img class="photo-preview" id="photo-prev" src="' + photoData.data + '" alt=""><input type="file" accept="image/*" onchange="handlePhoto(this)">'; }
+    else { prev.src = photoData.data; }
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function saveSauce() {
+  var nm = document.getElementById('f-nm').value.trim();
+  if (!nm) { toast(t('btn_name_required')); return; }
+  var R = allR();
+  var key = editKey || (nm.toLowerCase().replace(/[^a-z0-9]+/g,'_') + '_' + Date.now());
+  var existing = editKey ? R[editKey] : null;
+  var sauce = {
+    nm: nm,
+    fr: document.getElementById('f-fr').value.trim() || nm,
+    mo: document.getElementById('f-mo').value.trim() || '—',
+    cat: document.getElementById('f-cat').value,
+    cl: document.getElementById('f-cl').value.trim(),
+    tp: document.getElementById('f-tp').value,
+    tm: document.getElementById('f-tm').value,
+    df: document.getElementById('f-df').value,
+    ti: document.getElementById('f-ti').value.trim(),
+    bs: document.getElementById('f-bs').value.trim() || '—',
+    ig: { base: getRows('ig-base'), aromatics: getRows('ig-aromatics'), acid: getRows('ig-acid'), finish: getRows('ig-finish') },
+    st: getRows('f-st'),
+    rc: document.getElementById('f-rc').value.trim(),
+    pr: document.getElementById('f-pr').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+    dv: document.getElementById('f-dv').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+    sm: document.getElementById('f-sm').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+    photo: photoData.data || (existing ? existing.photo : '') || ''
+  };
+  custom[key] = sauce;
+  saveUserData();
+  rebuildTG();
+  toast(editKey ? t('btn_changes_saved') : t('btn_sauce_added'));
+  cur = key;
+  openSauce(key);
+}
+
+// ── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
+function x(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Escapes a value for safe embedding inside a single-quoted JS string
+// literal in an inline onclick="..." attribute (e.g. sauce names/keys
+// containing an apostrophe, like "l'Aurore" or "d'Hotel", would otherwise
+// close the string early and silently break the click handler).
+function jsq(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function attrJson(v) {
+  return JSON.stringify(v).replace(/"/g, '&quot;');
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2200);
+}
+
+// ── START ─────────────────────────────────────────────────────────────
+// Aliases для сумісності з index.html
+var nTo = navTo;
+var oS = openSauce;
+var oSrch = onSearch;
+var oForm = openForm;
+var tFav = toggleFav;
+var tNote = toggleNote;
+var svNote = saveNote;
+var doDel = doDelete;
+var changeFontSize = function(delta) {
+  var fontScale = userData.fs || 1;
+  fontScale = Math.min(1.5, Math.max(0.7, +(fontScale + delta * 0.1).toFixed(1)));
+  userData.fs = fontScale;
+  saveUserData();
+  document.documentElement.style.setProperty('--fs-scale', fontScale);
 };
 
-// ── Словник українських назв (будується з s_uk у кожному sub) ─────────
-// Щоб додати переклад назви соусу для списків (Ієрархія / Всі соуси),
-// допишіть паралельний масив s_uk поруч із s у потрібному підрозділі
-// (той самий порядок і довжина; порожній рядок "" = показати англійську).
-function _buildNameUk() {
-  window.SD.nameUk = {};
-  window.SD.cats.forEach(function (cat) {
-    cat.subs.forEach(function (sub) {
-      if (sub.s_uk) {
-        sub.s.forEach(function (nm, i) {
-          if (sub.s_uk[i]) window.SD.nameUk[nm] = sub.s_uk[i];
-        });
-      }
+function applyLang() {
+  var btn = document.getElementById('lang-label');
+  if (btn) btn.textContent = currentLang === 'uk' ? 'EN' : 'UA';
+  // Fill home grid card texts
+  setText('nav-hierarchy',      t('nav_hierarchy'));
+  setText('nav-hierarchy-desc', t('nav_hierarchy_desc'));
+  setText('nav-dish',           t('nav_dish'));
+  setText('nav-dish-desc',      t('nav_dish_desc'));
+  setText('nav-technique',      t('nav_technique'));
+  setText('nav-technique-desc', t('nav_technique_desc'));
+  setText('nav-all',            t('nav_all'));
+  setText('nav-all-desc',       t('nav_all_desc'));
+  setText('browse-by',          t('browse_by'));
+
+var totalNumEl = document.getElementById('total-count-number');
+if (totalNumEl) totalNumEl.textContent = t('label_total_count') + ': ' + allSaucesList().length;
+
+var totalNoteEl = document.getElementById('total-count-note');
+if (totalNoteEl) totalNoteEl.textContent = t('total_count_note');
+
+  var sq = document.getElementById('sq');
+  if (sq) sq.placeholder = t('search_placeholder');
+  var glq = document.getElementById('glq');
+  if (glq) glq.placeholder = t('glossary_search_placeholder');
+  // Bottom nav
+  setText('bnav-home',      t('bnav_home'));
+  setText('bnav-structure', t('bnav_structure'));
+  setText('bnav-all',       t('bnav_all'));
+  setText('bnav-saved',     t('bnav_saved'));
+  setText('bnav-glossary',  t('bnav_glossary'));
+
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+}
+
+function setText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// ── ALL SAUCES LIST ────────────────────────────────────────────────────
+var allFilter = 'All';
+
+function allSaucesList() {
+  var R = allR();
+  var nameMap = {};
+  SD.cats.forEach(function(cat) {
+    cat.subs.forEach(function(sub) {
+      sub.s.forEach(function(nm) {
+        var k = fKey(nm);
+        // hasRecipe: either key found in R, or file exists (key matches slug)
+        nameMap[nm] = { key: k || null, cat: cat.nm, hasRecipe: !!k };
+      });
     });
   });
+  Object.keys(R).forEach(function(k) {
+    var s = R[k];
+    var alreadyIn = Object.keys(nameMap).some(function(nm) {
+      return nameMap[nm].key === k;
+    });
+    if (!alreadyIn) {
+      nameMap[s.nm] = { key: k, cat: s.cat, hasRecipe: true };
+    } else {
+      // Update hasRecipe for already listed items
+      Object.keys(nameMap).forEach(function(nm) {
+        if (nameMap[nm].key === k) nameMap[nm].hasRecipe = true;
+      });
+    }
+  });
+  return Object.keys(nameMap).map(function(nm) {
+    return { nm: nm, key: nameMap[nm].key, cat: nameMap[nm].cat, hasRecipe: nameMap[nm].hasRecipe };
+  }).sort(function(a, b) { return a.nm.localeCompare(b.nm); });
+}
+// ── SORTING ──────────────────────────────────────────────────────────
+var DIFF_ORDER = { Easy: 0, Medium: 1, Hard: 2 };
+function parseTimeMin(s) {
+  var m = /(\d+)/.exec(s || '');
+  return m ? parseInt(m[1], 10) : 0;
+}
+function sortName(k, R) {
+  var s = R[k];
+  if (!s) return k;
+  return (currentLang === 'uk' && s.nm_uk) ? s.nm_uk : s.nm;
+}
+function sortSauceKeys(keys, R, mode) {
+  var arr = keys.slice();
+  switch (mode) {
+    case 'za':
+      return arr.sort(function(a, b) { return sortName(b, R).localeCompare(sortName(a, R), ['uk', 'en'], { sensitivity: 'base' }); });
+    case 'time-asc':
+      return arr.sort(function(a, b) { return parseTimeMin(R[a].ti) - parseTimeMin(R[b].ti); });
+    case 'time-desc':
+      return arr.sort(function(a, b) { return parseTimeMin(R[b].ti) - parseTimeMin(R[a].ti); });
+    case 'diff-asc':
+      return arr.sort(function(a, b) { return (DIFF_ORDER[R[a].df] || 0) - (DIFF_ORDER[R[b].df] || 0); });
+    case 'diff-desc':
+      return arr.sort(function(a, b) { return (DIFF_ORDER[R[b].df] || 0) - (DIFF_ORDER[R[a].df] || 0); });
+    case 'az':
+    default:
+      return arr.sort(function(a, b) { return sortName(a, R).localeCompare(sortName(b, R), ['uk', 'en'], { sensitivity: 'base' }); });
+  }
+}
+var SORT_LABELS_KEY = { az: 'sort_az', za: 'sort_za', 'time-asc': 'sort_time_asc', 'time-desc': 'sort_time_desc', 'diff-asc': 'sort_diff_asc', 'diff-desc': 'sort_diff_desc' };
+
+function toggleSortMenu(menuId) {
+  document.querySelectorAll('.sort-menu').forEach(function(m) {
+    if (m.id !== menuId) m.classList.remove('open');
+  });
+  document.getElementById(menuId).classList.toggle('open');
+}
+function pickSort(menuId, mode, applyFn) {
+  if (menuId === 'sort-menu-all') sortModeAll = mode;
+  if (menuId === 'sort-menu-sublist') sortModeSublist = mode;
+  document.getElementById(menuId).classList.remove('open');
+  applyFn();
+}
+var sortModeAll = 'az';
+var sortModeSublist = 'az';
+
+function sortAllItems(items, R, mode) {
+  function fld(item, f) { return (item.key && R[item.key]) ? R[item.key][f] : undefined; }
+  function nm(item) {
+    var s = item.key && R[item.key];
+    return (currentLang === 'uk' && s && s.nm_uk) ? s.nm_uk : sName(item.nm);
+  }
+  var arr = items.slice();
+  switch (mode) {
+    case 'za': return arr.sort(function(a,b){ return nm(b).localeCompare(nm(a), ['uk','en'], {sensitivity:'base'}); });
+    case 'time-asc': return arr.sort(function(a,b){ return parseTimeMin(fld(a,'ti')) - parseTimeMin(fld(b,'ti')); });
+    case 'time-desc': return arr.sort(function(a,b){ return parseTimeMin(fld(b,'ti')) - parseTimeMin(fld(a,'ti')); });
+    case 'diff-asc': return arr.sort(function(a,b){ return (DIFF_ORDER[fld(a,'df')]||0) - (DIFF_ORDER[fld(b,'df')]||0); });
+    case 'diff-desc': return arr.sort(function(a,b){ return (DIFF_ORDER[fld(b,'df')]||0) - (DIFF_ORDER[fld(a,'df')]||0); });
+    case 'az': default: return arr.sort(function(a,b){ return nm(a).localeCompare(nm(b), ['uk','en'], {sensitivity:'base'}); });
+  }
 }
 
-// ── Bootstrap: fetch data.json (cats/usage/cico/uico/tico) ────────────
-// app.js's DOMContentLoaded handler awaits this before calling initApp().
-window.SD_READY = fetch(window.SD._dataJsonPath)
+function bAll(filter) {
+ if (filter !== undefined && filter !== '') allFilter = filter;
+  var list = allSaucesList();
+  var catObjs = [{ nm: 'All', nm_uk: t('sort_all_cat') || 'All' }].concat(SD.cats.map(function(c) { return { nm: c.nm, nm_uk: c.nm_uk }; }));
+
+  var filterEl = document.getElementById('all-filter');
+  if (filterEl) {
+    filterEl.innerHTML = catObjs.map(function(c) {
+      var label = (currentLang === 'uk' && c.nm_uk) ? c.nm_uk : c.nm;
+      return '<button class="fc' + (allFilter === c.nm ? ' on' : '') + '" onclick="bAll(\'' + c.nm + '\')">' + x(label) + '</button>';
+    }).join('');
+  }
+
+  var isAll = (allFilter === 'All');
+  var filtered = isAll ? list : list.filter(function(item) {
+    return item.cat === allFilter;
+  });
+
+  var q = (document.getElementById('allq') || {}).value || '';
+  q = q.trim().toLowerCase();
+  if (q) {
+    filtered = filtered.filter(function(item) {
+      return (item.nm || '').toLowerCase().indexOf(q) !== -1
+        || sName(item.nm).toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  var albEl = document.getElementById('alb');
+  if (!albEl) return;
+
+  var htEl = document.getElementById('ht');
+  var allScreenActive = document.getElementById('s-all') && document.getElementById('s-all').classList.contains('active');
+  if (htEl && allScreenActive) {
+    htEl.textContent = t('title_all') + ' (' + filtered.length + ')';
+  }
+filtered = sortAllItems(filtered, allR(), sortModeAll);
+ albEl.innerHTML = '<div class="lb">' + filtered.map(function(item) {
+    var isCustom = item.key && !!custom[item.key];
+    return '<div class="all-item">'
+      + '<div class="ai-main">'
+      + '<div class="ai-nm" onclick="openSauce(\'' + jsq(x(item.key || item.nm)) + '\')" style="cursor:pointer;color:var(--b2)">' + x(sName(item.nm)) + '</div>'
+      + '<div class="ai-cat">' + x(trCat(item.cat)) + (!item.hasRecipe ? ' · <span style="color:#bbb0a0">no recipe</span>' : '') + '</div>'
+      + '</div>'
+      + '<div class="ai-btns">'
+      + (item.key ? '<button class="ai-view" onclick="openSauce(\'' + jsq(x(item.key)) + '\')">View</button>' : '')
+      /* + '<button class="ai-edit" onclick="editSauce(\'' + x(item.nm) + '\')">Edit</button>' */
+/*       + (isCustom ? '<button class="ai-del" onclick="doDelete(\'' + jsq(x(item.key)) + '\')"><span class="iconify" data-icon="mdi:trash" style="font-size:28px"></span></button>' : '') */
+      + '</div>'
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+// ALL_SAUCE_KEYS now lives in data/keys.json, fetched below and
+// populated before initApp() runs (see DOMContentLoaded handler).
+var ALL_SAUCE_KEYS = [];
+
+window.SD_KEYS_READY = fetch('./data/keys.json')
   .then(function (res) {
-    if (!res.ok) throw new Error('Failed to fetch data.json: ' + res.status);
+    if (!res.ok) throw new Error('Failed to fetch keys.json: ' + res.status);
     return res.json();
   })
-  .then(function (json) {
-    window.SD.cats = json.cats;
-    window.SD.usage = json.usage;
-    window.SD.cico = json.cico;
-    window.SD.uico = json.uico;
-    window.SD.tico = json.tico;
-    _buildNameUk();
-    return window.SD;
+  .then(function (keys) {
+    ALL_SAUCE_KEYS.length = 0;
+    keys.forEach(function (k) { ALL_SAUCE_KEYS.push(k); });
+    return ALL_SAUCE_KEYS;
   })
   .catch(function (err) {
-    console.error('Failed loading data.json:', err);
+    console.error('Failed loading keys.json:', err);
     throw err;
   });
+
+//----BANNER ---------
+function randomHeroImage() {
+const hero = document.querySelector('.hero');
+  if (!hero) return;
+
+  const count = 22;
+  const n = Math.floor(Math.random() * count) + 1;
+
+  const file = String(n).padStart(2, '0') + '.jpg';
+
+  hero.style.backgroundImage = `
+    linear-gradient(
+      to top,
+      rgba(26,15,6,.95) 0%,
+      rgba(225,230,196,.50) 50%,
+      rgba(0,0,0,0) 75%
+    ),
+    url('./bg/${file}')
+  `;
+  hero.style.backgroundPosition = `50% ${30 + Math.floor(Math.random() * 41)}%`;
+}
+function sizeSauceHero(img) {
+  var container = img.parentElement;
+  var cw = container.clientWidth;
+  var ch = 300;
+
+  var scaleH = ch / img.naturalHeight;
+  var scaledWidth = img.naturalWidth * scaleH;
+
+  var scale;
+  if (scaledWidth < cw) {
+    // фото вужче за контейнер — розтягуємо під ширину екрана, висота стає більшою за 300
+    scale = cw / img.naturalWidth;
+  } else {
+    // фото достатньо широке — тримаємо висоту рівно 300px
+    scale = scaleH;
+  }
+
+  img.style.width  = img.naturalWidth  * scale + 'px';
+  img.style.height = img.naturalHeight * scale + 'px';
+}
+
+
+function initApp() {
+  SD = window.SD;
+  document.documentElement.style.setProperty('--fs-scale', userData.fs || 1);
+  applyLang();
+  bHier();
+  bUsage();
+  bTech();
+  bAll();
+
+  // load banner
+  randomHeroImage();
+  
+  // Preload all sauces in background
+  window.SD.loadSauces(ALL_SAUCE_KEYS).then(function() {
+    rebuildTG();
+    bHier(); bUsage(); bTech(); bAll();
+    applyLang(); // оновити "Всього соусів" тепер, коли всі дані довантажені
+  }).catch(function(e){ console.warn('Preload partial:', e); });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  Promise.all([
+    loadUserData(),
+    window.SD_READY,
+    window.SD_KEYS_READY
+  ]).then(function () {
+    currentLang = userData.lang || 'en';
+    favs = userData.fav;
+    notes = userData.nts;
+    custom = userData.cst;
+    initApp();
+  }).catch(function (err) {
+    console.error('Startup failed:', err);
+  });
+});

@@ -1,7 +1,7 @@
 // data/sauces/bourguignonne_fish.js
 export default {
-  "Bourguignonne Fish (Ro)": {
-    nm: "Bourguignonne Fish (Ro)",
+  "Bourguignonne Fish": {
+    nm: "Bourguignonne Fish",
     pr: ["fish", "trout", "carp", "pike"],
     ig: {
       base: ["red wine fish fumet (1L)", "espagnole sauce or thickened veal stock (20cl)"],
@@ -18,7 +18,7 @@ export default {
     ],
     rc: "Prepare a fish fumet using only an excellent red wine. Cook for 25-30 minutes. Strain through a chinois and set aside. Sweat 40g of chopped onion and 20g of chopped shallot in butter; add 50g of mushrooms, 1 sprig of thyme, a piece of bay leaf, and 1 crushed garlic clove. Deglaze with 1 litre of red wine fish fumet, bring to a boil, and reduce by three-quarters to obtain about 25cl. Add the cooking liquid from the prepared fish and reduce again by half. Add 20cl of espagnole sauce or thickened veal stock; bring to a boil, skim, and cook for a few minutes, then strain through a chinois. Off the heat, finish the sauce by whisking in 50g of butter. Season with salt and pepper.",
 
-    nm_uk: "Соус Бургіньон (рибний) (Роб)",
+    nm_uk: "Соус Бургіньон (рибний)",
     pr_uk: ["риба", "форель", "короп", "щука"],
     ig_uk: {
       base: ["фюме з риби на червоному вині (1л)", "еспаньол або загущений телячий бульйон (200 мл)"],
@@ -37,7 +37,7 @@ export default {
 
     fr: "Sauce Bourguignonne (poisson)",
     cat: "Brown Sauces",
-    mo: "Espagnole (Es)",
+    mo: "Espagnole",
     tp: "Reduction",
     tm: "Hot",
     bs: "Red wine/Fish stock",
@@ -45,7 +45,6 @@ export default {
     ti: "1 hr",
     ti_uk: "1 год",
     bs_uk: "Бульйон з риби",
-    sm: ["Bourguignonne Sauce (Es)","Bourguignonne Meat (Ro)","Genevoise (Ro)","Genevoise Sauce (Es)","Matelote (Ro)","Matelote Sauce (Es)"],
       cl: "Robuchon",  // Classic reference
     photo: "./image/bourguignonne_fish.jpg"
   }

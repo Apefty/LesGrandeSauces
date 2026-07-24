@@ -166,6 +166,112 @@ function checkAppUpdateFromAbout() {
   });
 }
 
+// ── Backup: export/import favorites + notes ────────────────────────────
+// Format: { app, exportVersion, exportedAt, favorites: [...], notes: {...} }
+// Import MERGES into current data — it never wipes existing favorites/notes.
+// New favorites are added (no duplicates); imported notes overwrite a note
+// for the same sauce key if one already exists (backup assumed newer).
+function exportUserData() {
+  var payload = {
+    app: 'Les Grandes Sauces',
+    exportVersion: 1,
+    exportedAt: new Date().toISOString(),
+    favorites: favs,
+    notes: notes
+  };
+  var json = JSON.stringify(payload, null, 2);
+  var filename = 'les-grandes-sauces-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+
+  if (isNeutralino) {
+    Neutralino.os.showSaveDialog(t('about_export_notes'), {
+      defaultPath: filename,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+      .then(function (path) {
+        if (!path) return null;
+        return Neutralino.filesystem.writeFile(path, json).then(function () { return true; });
+      })
+      .then(function (saved) { if (saved) toast(t('about_export_success')); })
+      .catch(function (e) { console.error('Export failed:', e); toast(t('about_import_error')); });
+    return;
+  }
+
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(t('about_export_success'));
+}
+
+function importUserData() {
+  if (isNeutralino) {
+    Neutralino.os.showOpenDialog(t('about_import_notes'), {
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+      .then(function (paths) {
+        if (!paths || !paths.length) return null;
+        return Neutralino.filesystem.readFile(paths[0]);
+      })
+      .then(function (text) { if (text !== null && text !== undefined) applyImportedBackup(text); })
+      .catch(function (e) { console.error('Import failed:', e); toast(t('about_import_error')); });
+    return;
+  }
+  var input = document.getElementById('import-file-input');
+  if (input) input.click();
+}
+
+function handleImportFileChange(evt) {
+  var file = evt.target.files && evt.target.files[0];
+  evt.target.value = ''; // allow re-selecting the same file again later
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () { applyImportedBackup(reader.result); };
+  reader.onerror = function () { toast(t('about_import_error')); };
+  reader.readAsText(file);
+}
+
+function applyImportedBackup(text) {
+  var data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    toast(t('about_import_error'));
+    return;
+  }
+  if (!data || data.app !== 'Les Grandes Sauces' || typeof data.exportVersion !== 'number') {
+    toast(t('about_import_error'));
+    return;
+  }
+
+  var importedFavs = Array.isArray(data.favorites) ? data.favorites : [];
+  var importedNotes = (data.notes && typeof data.notes === 'object') ? data.notes : {};
+
+  importedFavs.forEach(function (key) {
+    if (favs.indexOf(key) === -1) favs.push(key);
+  });
+  Object.keys(importedNotes).forEach(function (key) {
+    notes[key] = importedNotes[key];
+  });
+
+  userData.fav = favs;
+  userData.nts = notes;
+  saveUserData();
+
+  toast(t('about_import_success'));
+
+  var active = document.querySelector('.scr.active, .screen.active');
+  if (active) {
+    var id = active.id.replace('s-', '');
+    if (id === 'favs') bFavs();
+    else if (id === 'sauce' && cur) openSauce(cur, false);
+  }
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────
 var stk = ['home'], cur = null, noteEditing = false, editKey = null, photoData = {};
 var sauceHistory = []; // ключі соусів, щоб коректно повертатись "назад" при переходах соус→соус
@@ -350,7 +456,7 @@ function onSearch(v) {
       : '';
 
     return sep +
-      '<div class="sri" onclick="openSauce(\'' + k + '\')">' +
+      '<div class="sri" onclick="openSauce(\'' + jsq(k) + '\')">' +
       '<div class="sri-ico">' + (SD.cico[s.cat] || '🍶') + '</div>' +
       '<div><div class="sri-n">' + x(sName(s.nm)) + '</div>' +
       '<div class="sri-c">' + x(trCat(s.cat)) + ' · ' + x(trVal("tp", s.tp)) + '</div></div>' +
@@ -404,7 +510,7 @@ function bHier() {
           + sub.s.map(function(nm) {
             var rk = fKey(nm);
             var callKey = rk || nm;
-            return '<div class="sli" onclick="openSauce(\'' + callKey + '\')">'
+            return '<div class="sli" onclick="openSauce(\'' + jsq(callKey) + '\')">'
               + '<div class="sld"></div>'
               + '<div class="sln">' + x(sName(nm)) + '</div>'
               + '<span class="slt">›</span>'
@@ -479,7 +585,7 @@ function renderSublist() {
       var s = R[k];
       var nm = s ? sName(s.nm) : k;
       var cat = s ? s.cat : '';
-      return '<div class="li" onclick="openSauce(\'' + x(k) + '\')">'
+      return '<div class="li" onclick="openSauce(\'' + jsq(x(k)) + '\')">'
         + '<div style="flex:1"><div class="li-n">' + x(nm) + '</div>'
         + (cat ? '<div class="li-s">' + x(trCat(cat)) + '</div>' : '') + '</div>'
         + '<span class="li-ar">›</span></div>';
@@ -497,7 +603,7 @@ function bFavs() {
   b.innerHTML = '<div class="list-body">'
     + favs.map(function(k) {
       var s = R[k]; if (!s) return '';
-      return '<div class="li" onclick="openSauce(\'' + k + '\')">'
+      return '<div class="li" onclick="openSauce(\'' + jsq(k) + '\')">'
         + '<div style="flex:1"><div class="li-n">' + x(s.nm) + '</div>'
         + '<div class="li-s">' + x(trCat(s.cat)) + (notes[k] ? ' · 📝' : '') + '</div></div>'
         + '<span class="li-ar">›</span></div>';
@@ -579,7 +685,7 @@ async function openSauce(key, push) {
   if (s.mo && s.mo !== '—' && s.mo !== s.nm) {
     var moKey = fKey(s.mo);
     if (moKey && moKey !== key) {
-      bc += '<span class="bci" onclick="openSauce(\'' + moKey + '\')">' + x(moName(s.mo)) + '</span>'
+      bc += '<span class="bci" onclick="openSauce(\'' + jsq(moKey) + '\')">' + x(moName(s.mo)) + '</span>'
         + '<span class="bcs"><span class="iconify" data-icon="tdesign:chevron-right-double-s" data-width="28px"></span></span>';
     } else {
       bc += '<span class="bci plain">' + x(moName(s.mo)) + '</span><span class="bcs"><span class="iconify" data-icon="tdesign:chevron-right-double-s" data-width="28px"></span></span>';
@@ -619,7 +725,7 @@ async function openSauce(key, push) {
         var dk = fKey(d);
         var callKey = dk || d;
         return '<div class="dtch' + (dk === key ? ' current' : '') + '"'
-          + ' onclick="openSauce(\'' + callKey + '\')">' + x(R[dk] ? tf(R[dk], 'nm') : sName(d)) + '</div>';
+          + ' onclick="openSauce(\'' + jsq(callKey) + '\')">' + x(R[dk] ? tf(R[dk], 'nm') : sName(d)) + '</div>';
       }).join('') + '</div></div>';
   }
 
@@ -630,7 +736,7 @@ async function openSauce(key, push) {
       + s.sm.filter(function(n) { return n !== s.nm; }).map(function(n) {
           var sk = fKey(n);
           var callKey = sk || n;
-          return '<div class="rli" onclick="openSauce(\'' + callKey + '\')">'
+          return '<div class="rli" onclick="openSauce(\'' + jsq(callKey) + '\')">'
             + '<span>' + x(R[sk] ? tf(R[sk], 'nm') : sName(n)) + '</span>'
             + '</div>';
         }).join('') + '</div>';
@@ -671,13 +777,15 @@ async function openSauce(key, push) {
     + '<textarea class="notes-edit-area" id="notes-ta" placeholder="' + t('ph_notes') + '" style="display:none"></textarea>'
     + '<div class="notes-buttons">'
     + '<button class="ab btn-note-edit" id="btn-note-edit" onclick="toggleNote()">' + t('notes_edit') + '</button>'
-    + '<button class="ab btn-note-save" id="btn-note-save" onclick="saveNote(\'' + key + '\')">✓ ' + t('notes_save') + '</button>'
+    + '<button class="ab btn-note-save" id="btn-note-save" onclick="saveNote(\'' + jsq(key) + '\')">✓ ' + t('notes_save') + '</button>'
+    + '<button class="ab btn-note-export" onclick="exportUserData()">' + x(t('about_export_notes')) + '</button>'
+    + '<button class="ab btn-note-import" onclick="importUserData()">' + x(t('about_import_notes')) + '</button>'
     + '</div></div>'
 
     + '<div class="ssec"><div class="ar">'
     + '<button class="ab btn-save' + (fav ? ' on' : '') + '" id="btn-fav-card" onclick="toggleFav()">' + (fav ? '<span class="iconify" data-icon="mdi:heart"></span> ' + t('btn_in_favs') : '<span class="iconify" data-icon="mdi:heart-outline"></span> ' + t('btn_add_favs')) + '</button>'
 
-    + (isCust ? '<button class="ab ab-dlete" onclick="doDelete(\'' + key + '\')">🗑</button>' : '')
+    + (isCust ? '<button class="ab ab-dlete" onclick="doDelete(\'' + jsq(key) + '\')">🗑</button>' : '')
     + '</div></div>'
     + '<div style="height:40px"></div>';
 
@@ -926,6 +1034,14 @@ function x(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Escapes a value for safe embedding inside a single-quoted JS string
+// literal in an inline onclick="..." attribute (e.g. sauce names/keys
+// containing an apostrophe, like "l'Aurore" or "d'Hotel", would otherwise
+// close the string early and silently break the click handler).
+function jsq(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function attrJson(v) {
   return JSON.stringify(v).replace(/"/g, '&quot;');
 }
@@ -1131,13 +1247,13 @@ filtered = sortAllItems(filtered, allR(), sortModeAll);
     var isCustom = item.key && !!custom[item.key];
     return '<div class="all-item">'
       + '<div class="ai-main">'
-      + '<div class="ai-nm" onclick="openSauce(\'' + x(item.key || item.nm) + '\')" style="cursor:pointer;color:var(--b2)">' + x(sName(item.nm)) + '</div>'
+      + '<div class="ai-nm" onclick="openSauce(\'' + jsq(x(item.key || item.nm)) + '\')" style="cursor:pointer;color:var(--b2)">' + x(sName(item.nm)) + '</div>'
       + '<div class="ai-cat">' + x(trCat(item.cat)) + (!item.hasRecipe ? ' · <span style="color:#bbb0a0">no recipe</span>' : '') + '</div>'
       + '</div>'
       + '<div class="ai-btns">'
-      + (item.key ? '<button class="ai-view" onclick="openSauce(\'' + x(item.key) + '\')">View</button>' : '')
+      + (item.key ? '<button class="ai-view" onclick="openSauce(\'' + jsq(x(item.key)) + '\')">View</button>' : '')
       /* + '<button class="ai-edit" onclick="editSauce(\'' + x(item.nm) + '\')">Edit</button>' */
-/*       + (isCustom ? '<button class="ai-del" onclick="doDelete(\'' + x(item.key) + '\')"><span class="iconify" data-icon="mdi:trash" style="font-size:28px"></span></button>' : '') */
+/*       + (isCustom ? '<button class="ai-del" onclick="doDelete(\'' + jsq(x(item.key)) + '\')"><span class="iconify" data-icon="mdi:trash" style="font-size:28px"></span></button>' : '') */
       + '</div>'
       + '</div>';
   }).join('') + '</div>';

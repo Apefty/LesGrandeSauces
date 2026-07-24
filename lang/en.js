@@ -23,6 +23,12 @@ window.LANG_EN = {
   about_update_applied: "Update installed — restarting",
   about_update_error: "Could not check for updates",
 
+  about_export_notes: "Export notes & favorites",
+  about_import_notes: "Import notes & favorites",
+  about_export_success: "Backup saved",
+  about_import_success: "Backup imported",
+  about_import_error: "Import failed — not a valid backup file",
+
   // Search
   search_placeholder: "Search sauces, ingredients",
   glossary_search_placeholder: "Search terms",

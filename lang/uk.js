@@ -23,6 +23,12 @@ window.LANG_UK = {
   about_update_applied: "Оновлення встановлено — перезапуск",
   about_update_error: "Не вдалося перевірити оновлення",
 
+  about_export_notes: "Експортувати нотатки й обране",
+  about_import_notes: "Імпортувати нотатки й обране",
+  about_export_success: "Резервну копію збережено",
+  about_import_success: "Резервну копію імпортовано",
+  about_import_error: "Не вдалося імпортувати — файл не є коректною резервною копією",
+
   // Search
   search_placeholder: "Пошук соусів, інгредієнтів",
   glossary_search_placeholder: "Пошук термінів",
